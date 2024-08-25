@@ -46,6 +46,16 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 			continue;
 		}
 
+		// Calculate trim times
+		int32 StartTimeMs, EndTimeMs;
+		CalculateTrimTimes(LevelSequence, AudioSection, StartTimeMs, EndTimeMs);
+
+		// Skip if the section is determined to be looping
+		if (EndTimeMs < 0)
+		{
+			continue;
+		}
+
 		// Export the sound wave to a temporary WAV file
 		FString ExportPath = ExportSoundWaveToWav(SoundWave);
 		if (ExportPath.IsEmpty())
@@ -53,10 +63,6 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 			UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export %s. Skipping..."), *SoundWave->GetName());
 			continue;
 		}
-
-		// Calculate trim times
-		int32 StartTimeMs, EndTimeMs;
-		CalculateTrimTimes(LevelSequence, AudioSection, StartTimeMs, EndTimeMs);
 
 		const float StartTimeSec = StartTimeMs / 1000.0f;
 		const float EndTimeSec = EndTimeMs / 1000.0f;
@@ -135,29 +141,39 @@ void UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSe
 	const float SectionDurationSeconds = SectionDurationFrames / TickResolution.AsDecimal();
 
 	// Calculate the effective end time within the audio asset
-	float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
+	const float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
 
 	if (const USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound()))
 	{
 		// Total duration of the audio in seconds
 		const float TotalAudioDurationSeconds = SoundWave->Duration;
 
-		// Adjust the end time if it exceeds the total length of the audio
+		// Check if the section is looping
 		if (AudioEndSeconds > TotalAudioDurationSeconds)
 		{
-			AudioEndSeconds = TotalAudioDurationSeconds;
+			// Directly use the frame numbers from the section
+			const int32 StartFrameIndex = AudioSection->GetInclusiveStartFrame().Value;
+			const int32 EndFrameIndex = AudioSection->GetExclusiveEndFrame().Value;
+
+			// Log the rounded frame numbers divided by 1000
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("Audio section cannot be processed as it is looping and starts from the beginning. Level Sequence: %s, Audio Asset: %s, Section Range: %d - %d"),
+			       *LevelSequence->GetName(), *SoundWave->GetName(),
+			       FMath::RoundToInt(StartFrameIndex / 1000.f),
+			       FMath::RoundToInt(EndFrameIndex / 1000.f));
+
+			// Set the end time to an invalid value to signal skipping
+			EndTimeMs = -1;
+			return;
 		}
 
 		// Calculate the start and end times in milliseconds
 		StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
 		EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
 
-		// Calculate the percentage of the audio that is used
-		const float UsedPercentage = ((AudioEndSeconds - AudioStartOffsetSeconds) / TotalAudioDurationSeconds) * 100.0f;
-
 		// Log the start and end times in milliseconds, section duration, and percentage used
 		UE_LOG(LogAudioTrimmer, Log, TEXT("Audio: %s, Used from %.2f seconds to %.2f seconds (Duration: %.2f seconds), Percentage Used: %.2f%%"),
-		       *SoundWave->GetName(), AudioStartOffsetSeconds, AudioEndSeconds, AudioEndSeconds - AudioStartOffsetSeconds, UsedPercentage);
+		       *SoundWave->GetName(), AudioStartOffsetSeconds, AudioEndSeconds, AudioEndSeconds - AudioStartOffsetSeconds,
+		       ((AudioEndSeconds - AudioStartOffsetSeconds) / TotalAudioDurationSeconds) * 100.0f);
 	}
 	else
 	{
