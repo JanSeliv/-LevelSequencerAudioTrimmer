@@ -5,6 +5,7 @@
 #include "AssetExportTask.h"
 #include "AssetToolsModule.h"
 #include "LevelSequence.h"
+#include "LevelSequencerAudioSettings.h"
 #include "LevelSequencerAudioTrimmerEdModule.h"
 #include "MovieScene.h"
 #include "MovieSceneTrack.h"
@@ -19,7 +20,6 @@
 #include "Sound/SoundWave.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "Tracks/MovieSceneAudioTrack.h"
-#include "Tracks/MovieSceneSubTrack.h"
 //---
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AudioTrimmerUtilsLibrary)
 
@@ -151,7 +151,7 @@ bool UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSe
 
 	// Check if the section is looping and handle it
 	const int32 DifferenceMs = static_cast<int32>((AudioEndSeconds - TotalAudioDurationSeconds) * 1000.0f);
-	constexpr int32 MinDifferenceMs = 200;
+	const int32 MinDifferenceMs = ULevelSequencerAudioSettings::Get().MinDifferenceMs;
 
 	if (AudioEndSeconds > TotalAudioDurationSeconds && DifferenceMs >= MinDifferenceMs)
 	{
@@ -179,7 +179,7 @@ bool UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSe
 	// Calculate the total duration of the sound wave in milliseconds
 	const int32 TotalAudioDurationMs = static_cast<int32>(TotalAudioDurationSeconds * 1000.0f);
 
-	// Skip processing if the difference between total duration and usage duration is less than 200 milliseconds
+	// Skip processing if the difference between total duration and usage duration is less than MinDifferenceMs
 	if (TotalAudioDurationMs - UsageDurationMs < MinDifferenceMs)
 	{
 		UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *SoundWave->GetName());
