@@ -46,12 +46,9 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 			continue;
 		}
 
-		// Calculate trim times
+		// Calculate trim times and check if the section should be processed
 		int32 StartTimeMs, EndTimeMs;
-		CalculateTrimTimes(LevelSequence, AudioSection, StartTimeMs, EndTimeMs);
-
-		// Skip if the section is determined to be looping
-		if (EndTimeMs < 0)
+		if (!CalculateTrimTimes(LevelSequence, AudioSection, StartTimeMs, EndTimeMs))
 		{
 			continue;
 		}
@@ -66,7 +63,6 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 
 		const float StartTimeSec = StartTimeMs / 1000.0f;
 		const float EndTimeSec = EndTimeMs / 1000.0f;
-
 		FString TrimmedAudioPath = FPaths::ChangeExtension(ExportPath, TEXT("_trimmed.wav"));
 
 		// Trim the audio using the C++ function
@@ -122,12 +118,12 @@ TArray<UMovieSceneAudioSection*> UAudioTrimmerUtilsLibrary::GetAudioSections(con
 }
 
 //Calculates the start and end times in milliseconds for trimming an audio section
-void UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection, int32& StartTimeMs, int32& EndTimeMs)
+bool UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection, int32& StartTimeMs, int32& EndTimeMs)
 {
 	if (!LevelSequence || !AudioSection)
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid LevelSequence or AudioSection."));
-		return;
+		return false;
 	}
 
 	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
@@ -161,24 +157,39 @@ void UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSe
 			       FMath::RoundToInt(StartFrameIndex / 1000.f),
 			       FMath::RoundToInt(EndFrameIndex / 1000.f));
 
-			// Set the end time to an invalid value to signal skipping
-			EndTimeMs = -1;
-			return;
+			return false;
 		}
 
 		// Calculate the start and end times in milliseconds
 		StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
 		EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
 
+		// Calculate the usage duration in milliseconds
+		const int32 UsageDurationMs = EndTimeMs - StartTimeMs;
+
+		// Calculate the total duration of the sound wave in milliseconds
+		const int32 TotalAudioDurationMs = static_cast<int32>(TotalAudioDurationSeconds * 1000.0f);
+
+		// Check if the difference between total duration and usage duration is less than 200 milliseconds
+		const int32 DifferenceMs = TotalAudioDurationMs - UsageDurationMs;
+
+		constexpr int32 MinDifferenceMs = 200;
+		if (DifferenceMs < MinDifferenceMs)
+		{
+			UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *SoundWave->GetName());
+			return false;
+		}
+
 		// Log the start and end times in milliseconds, section duration, and percentage used
 		UE_LOG(LogAudioTrimmer, Log, TEXT("Audio: %s, Used from %.2f seconds to %.2f seconds (Duration: %.2f seconds), Percentage Used: %.2f%%"),
 		       *SoundWave->GetName(), AudioStartOffsetSeconds, AudioEndSeconds, AudioEndSeconds - AudioStartOffsetSeconds,
 		       ((AudioEndSeconds - AudioStartOffsetSeconds) / TotalAudioDurationSeconds) * 100.0f);
+
+		return true;
 	}
-	else
-	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("SoundWave is null or invalid."));
-	}
+
+	UE_LOG(LogAudioTrimmer, Warning, TEXT("SoundWave is null or invalid."));
+	return false;
 }
 
 // Trims an audio file to the specified start and end times

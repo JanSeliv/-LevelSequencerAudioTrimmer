@@ -37,7 +37,7 @@ public:
 	 * @param StartTimeMs Output parameter for the start time in milliseconds.
 	 * @param EndTimeMs Output parameter for the end time in milliseconds. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static void CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection, int32& StartTimeMs, int32& EndTimeMs);
+	static bool CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection, int32& StartTimeMs, int32& EndTimeMs);
 
 	/** Trims an audio file to the specified start and end times.
 	 * @param InputPath The file path to the audio file to trim.
