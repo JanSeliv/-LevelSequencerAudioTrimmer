@@ -80,7 +80,7 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 		}
 
 		// Reset the Start Frame Offset for this audio section
-		ResetStartFrameOffset(AudioSection);
+		ResetTrimmedAudioSection(AudioSection);
 
 		// Delete the temporary exported WAV file
 		DeleteTempWavFile(ExportPath);
@@ -290,7 +290,7 @@ bool UAudioTrimmerUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundW
 }
 
 // Resets the start frame offset of an audio section to zero
-void UAudioTrimmerUtilsLibrary::ResetStartFrameOffset(UMovieSceneAudioSection* AudioSection)
+void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection)
 {
 	if (!AudioSection)
 	{
@@ -298,10 +298,10 @@ void UAudioTrimmerUtilsLibrary::ResetStartFrameOffset(UMovieSceneAudioSection* A
 		return;
 	}
 
-	// Reset the start frame offset to zero
 	AudioSection->SetStartOffset(0);
-	AudioSection->MarkAsChanged();
+	AudioSection->SetLooping(false);
 
+	AudioSection->MarkAsChanged();
 	// Mark the movie scene as modified
 	const UMovieScene* MovieScene = AudioSection->GetTypedOuter<UMovieScene>();
 	if (MovieScene)

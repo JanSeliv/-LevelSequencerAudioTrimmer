@@ -64,7 +64,7 @@ public:
 	/** Resets the start frame offset of an audio section to zero.
 	 * @param AudioSection The audio section to modify. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static void ResetStartFrameOffset(UMovieSceneAudioSection* AudioSection);
+	static void ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection);
 
 	/** Deletes a temporary WAV file from the file system. * 
 	 * @param FilePath The file path of the WAV file to delete.
