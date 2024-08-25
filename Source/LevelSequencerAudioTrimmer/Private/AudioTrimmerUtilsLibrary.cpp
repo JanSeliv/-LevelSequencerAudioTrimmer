@@ -139,7 +139,7 @@ bool UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSe
 	// Calculate the effective end time within the audio asset
 	const float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
 
-	if (const USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound()))
+	const USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
 	{
 		// Total duration of the audio in seconds
 		const float TotalAudioDurationSeconds = SoundWave->Duration;
@@ -298,10 +298,24 @@ void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection
 		return;
 	}
 
+	const USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
+	if (!SoundWave)
+	{
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid SoundWave in AudioSection."));
+		return;
+	}
+
 	AudioSection->SetStartOffset(0);
 	AudioSection->SetLooping(false);
 
+	// Adjust the section duration to match the trimmed audio duration
+	const FFrameRate TickResolution = AudioSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const FFrameTime NewEndFrameTime = FFrameTime::FromDecimal(SoundWave->Duration * TickResolution.AsDecimal());
+	const FFrameNumber NewEndFrame = AudioSection->GetInclusiveStartFrame() + NewEndFrameTime.GetFrame();
+	AudioSection->SetEndFrame(NewEndFrame);
+
 	AudioSection->MarkAsChanged();
+
 	// Mark the movie scene as modified
 	const UMovieScene* MovieScene = AudioSection->GetTypedOuter<UMovieScene>();
 	if (MovieScene)
@@ -310,7 +324,7 @@ void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection
 	}
 
 	// Log the operation
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Reset Start Frame Offset for section using sound: %s"), *AudioSection->GetSound()->GetName());
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Reset Start Frame Offset and adjusted duration for section using sound: %s"), *SoundWave->GetName());
 }
 
 // Deletes a temporary WAV file from the file system
