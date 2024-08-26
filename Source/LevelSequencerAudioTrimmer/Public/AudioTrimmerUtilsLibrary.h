@@ -10,6 +10,8 @@ class UMovieSceneAudioSection;
 class ULevelSequence;
 class USoundWave;
 
+struct FTrimTimes;
+
 DEFINE_LOG_CATEGORY_STATIC(LogAudioTrimmer, Log, All);
 
 /**
@@ -34,19 +36,17 @@ public:
 	/** Calculates the start and end times in milliseconds for trimming an audio section.
 	 * @param LevelSequence The level sequence containing the audio section.
 	 * @param AudioSection The audio section to calculate trim times for.
-	 * @param StartTimeMs Output parameter for the start time in milliseconds.
-	 * @param EndTimeMs Output parameter for the end time in milliseconds. */
+	 * @return A struct containing the start and end times in milliseconds. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static bool CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection, int32& StartTimeMs, int32& EndTimeMs);
+	static FTrimTimes CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection);
 
 	/** Trims an audio file to the specified start and end times.
+	 * @param TrimTimes The start and end times in milliseconds to trim the audio file to.
 	 * @param InputPath The file path to the audio file to trim.
 	 * @param OutputPath The file path to save the trimmed audio file.
-	 * @param StartTimeSec The start time in seconds to trim from.
-	 * @param EndTimeSec The end time in seconds to trim to.
 	 * @return True if the audio was successfully trimmed, false otherwise. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static bool TrimAudio(const FString& InputPath, const FString& OutputPath, float StartTimeSec, float EndTimeSec);
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer", meta = (AutoCreateRefTerm = "TrimTimes", InputPath, OutputPath))
+	static bool TrimAudio(const FTrimTimes& TrimTimes, const FString& InputPath, const FString& OutputPath);
 
 	/** Exports a sound wave to a WAV file.
 	 * @param SoundWave The sound wave to export.
