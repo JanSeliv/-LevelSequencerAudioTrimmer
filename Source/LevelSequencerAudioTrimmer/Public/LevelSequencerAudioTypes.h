@@ -32,7 +32,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimes
 	bool IsValid() const;
 
 	/** Returns true if the start and end times are similar to the other trim times within the given tolerance. */
-	bool IsSimilar(const FTrimTimes& Other, int32 ToleranceMs = KINDA_SMALL_NUMBER) const;
+	bool IsSimilar(const FTrimTimes& Other, int32 ToleranceMs) const;
 
 	/** Equal operator for comparing in TMap. */
 	bool operator==(const FTrimTimes& Other) const;

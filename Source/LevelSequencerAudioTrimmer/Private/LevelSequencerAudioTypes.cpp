@@ -19,7 +19,7 @@ bool FTrimTimes::IsValid() const
 }
 
 // Returns true if the start and end times are similar to the other trim times within the given tolerance.
-bool FTrimTimes::IsSimilar(const FTrimTimes& Other, int32 ToleranceMs/* = KINDA_SMALL_NUMBER*/) const
+bool FTrimTimes::IsSimilar(const FTrimTimes& Other, int32 ToleranceMs) const
 {
 	return FMath::Abs(StartTimeMs - Other.StartTimeMs) <= ToleranceMs &&
 		FMath::Abs(EndTimeMs - Other.EndTimeMs) <= ToleranceMs;
