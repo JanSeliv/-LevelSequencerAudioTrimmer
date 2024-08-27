@@ -12,6 +12,7 @@
 #include "MovieScene.h"
 #include "MovieSceneTrack.h"
 #include "ObjectTools.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Exporters/Exporter.h"
 #include "Factories/ReimportSoundFactory.h"
 #include "HAL/FileManager.h"
@@ -22,99 +23,120 @@
 #include "Sound/SoundWave.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "Tracks/MovieSceneAudioTrack.h"
+#include "UObject/SavePackage.h"
 //---
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AudioTrimmerUtilsLibrary)
 
 // Runs the audio trimmer for given level sequence
 void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequence* LevelSequence)
 {
-	// Retrieve all audio sections from the Level Sequence
-	TArray<UMovieSceneAudioSection*> AudioSections = GetAudioSections(LevelSequence);
+	// Retrieve audio sections mapped by SoundWave from the Level Sequence
+	TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> AudioSectionsMap;
+	FindAudioSectionsInLevelSequence(AudioSectionsMap, LevelSequence);
 
-	if (AudioSections.Num() == 0)
+	if (AudioSectionsMap.IsEmpty())
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("No audio sections found in the level sequence."));
 		return;
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d audio sections."), AudioSections.Num());
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves."), AudioSectionsMap.Num());
 
-	for (UMovieSceneAudioSection* AudioSection : AudioSections)
+	for (const TTuple<USoundWave*, TArray<UMovieSceneAudioSection*>>& It : AudioSectionsMap)
 	{
-		USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
-		if (!SoundWave)
+		USoundWave* OriginalSoundWave = It.Key;
+		const TArray<UMovieSceneAudioSection*>& Sections = It.Value;
+
+		for (int32 Index = 0; Index < Sections.Num(); ++Index)
 		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to get SoundWave from AudioSection. Skipping..."));
-			continue;
+			UMovieSceneAudioSection* AudioSection = Sections[Index];
+			USoundWave* SoundWave = OriginalSoundWave;
+
+			// Calculate trim times and check if the section should be processed
+			const FTrimTimes TrimTimes = CalculateTrimTimes(LevelSequence, AudioSection);
+			if (!TrimTimes.IsValid())
+			{
+				continue;
+			}
+
+			// Duplicate the sound wave if it's not the last section using it
+			if (Index < Sections.Num() - 1)
+			{
+				SoundWave = DuplicateSoundWave(SoundWave, Index + 1);
+				AudioSection->SetSound(SoundWave);
+			}
+
+			// Export the sound wave to a temporary WAV file
+			const FString ExportPath = ExportSoundWaveToWav(SoundWave);
+			if (ExportPath.IsEmpty())
+			{
+				UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export %s"), *SoundWave->GetName());
+				continue;
+			}
+
+			const FString TrimmedAudioPath = FPaths::ChangeExtension(ExportPath, TEXT("_trimmed.wav"));
+
+			// Trim the audio using the C++ function
+			if (!TrimAudio(TrimTimes, ExportPath, TrimmedAudioPath))
+			{
+				UE_LOG(LogAudioTrimmer, Warning, TEXT("Trimming audio failed for %s"), *SoundWave->GetName());
+				continue;
+			}
+
+			// Only reimport the trimmed audio for the last section using the original sound wave
+			if (Index == Sections.Num() - 1)
+			{
+				if (!ReimportAudioToUnreal(SoundWave, TrimmedAudioPath))
+				{
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("Reimporting trimmed audio failed for %s"), *SoundWave->GetName());
+					continue;
+				}
+			}
+
+			// Reset the Start Frame Offset for this audio section
+			ResetTrimmedAudioSection(AudioSection);
+
+			// Delete the temporary exported WAV file
+			DeleteTempWavFile(ExportPath);
+			DeleteTempWavFile(TrimmedAudioPath);
 		}
-
-		// Calculate trim times and check if the section should be processed
-		const FTrimTimes TrimTimes = CalculateTrimTimes(LevelSequence, AudioSection);
-		if (!TrimTimes.IsValid())
-		{
-			continue;
-		}
-
-		// Export the sound wave to a temporary WAV file
-		FString ExportPath = ExportSoundWaveToWav(SoundWave);
-		if (ExportPath.IsEmpty())
-		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export %s. Skipping..."), *SoundWave->GetName());
-			continue;
-		}
-
-		FString TrimmedAudioPath = FPaths::ChangeExtension(ExportPath, TEXT("_trimmed.wav"));
-
-		// Trim the audio using the C++ function
-		if (!TrimAudio(TrimTimes, ExportPath, TrimmedAudioPath))
-		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Trimming audio failed for %s. Skipping..."), *SoundWave->GetName());
-			continue;
-		}
-
-		// Reimport the trimmed audio into the original sound wave asset using FReimportManager
-		if (!ReimportAudioToUnreal(SoundWave, TrimmedAudioPath))
-		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Reimporting trimmed audio failed for %s. Skipping..."), *SoundWave->GetName());
-			continue;
-		}
-
-		// Reset the Start Frame Offset for this audio section
-		ResetTrimmedAudioSection(AudioSection);
-
-		// Delete the temporary exported WAV file
-		DeleteTempWavFile(ExportPath);
-		DeleteTempWavFile(TrimmedAudioPath);
 	}
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Processing complete."));
 }
 
 // Retrieves all audio sections from the given level sequence
-TArray<UMovieSceneAudioSection*> UAudioTrimmerUtilsLibrary::GetAudioSections(const ULevelSequence* LevelSequence)
+void UAudioTrimmerUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, TArray<UMovieSceneAudioSection*>>& OutMap, const ULevelSequence* InLevelSequence)
 {
-	if (!LevelSequence)
+	if (!InLevelSequence)
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid LevelSequence."));
-		return {};
+		return;
 	}
 
-	TArray<UMovieSceneAudioSection*> AudioSections;
-	for (UMovieSceneTrack* Track : LevelSequence->GetMovieScene()->GetTracks())
+	if (!OutMap.IsEmpty())
 	{
-		if (const UMovieSceneAudioTrack* AudioTrack = Cast<UMovieSceneAudioTrack>(Track))
+		OutMap.Empty();
+	}
+
+	for (UMovieSceneTrack* Track : InLevelSequence->GetMovieScene()->GetTracks())
+	{
+		const UMovieSceneAudioTrack* AudioTrack = Cast<UMovieSceneAudioTrack>(Track);
+		if (!AudioTrack)
 		{
-			for (UMovieSceneSection* Section : AudioTrack->GetAllSections())
+			continue;
+		}
+
+		for (UMovieSceneSection* Section : AudioTrack->GetAllSections())
+		{
+			UMovieSceneAudioSection* AudioSection = Cast<UMovieSceneAudioSection>(Section);
+			USoundWave* SoundWave = AudioSection ? Cast<USoundWave>(AudioSection->GetSound()) : nullptr;
+			if (SoundWave)
 			{
-				if (UMovieSceneAudioSection* AudioSection = Cast<UMovieSceneAudioSection>(Section))
-				{
-					AudioSections.Add(AudioSection);
-				}
+				OutMap.FindOrAdd(SoundWave).AddUnique(AudioSection);
 			}
 		}
 	}
-
-	return AudioSections;
 }
 
 //Calculates the start and end times in milliseconds for trimming an audio section
@@ -269,6 +291,48 @@ FString UAudioTrimmerUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
 	return FString();
 }
 
+// Duplicates the given SoundWave asset, incrementing an index to its name
+USoundWave* UAudioTrimmerUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex)
+{
+	checkf(OriginalSoundWave, TEXT("ERROR: [%i] %hs:\n'OriginalSoundWave' is null!"), __LINE__, __FUNCTION__);
+
+	// Generate a new name with incremented index (e.g. SoundWave -> SoundWave1 or SoundWave1 -> SoundWave2)
+	const FString NewObjectName = [&]()-> FString
+	{
+		const FString& Name = OriginalSoundWave->GetName();
+		const int32 Index = Name.FindLastCharByPredicate([](TCHAR Char) { return !FChar::IsDigit(Char); });
+		const int32 NewIndex = (Index + 1 < Name.Len()) ? FCString::Atoi(*Name.Mid(Index + 1)) + DuplicateIndex : DuplicateIndex;
+		return FString::Printf(TEXT("%s%d"), *Name.Left(Index + 1), NewIndex);
+	}();
+
+	if (!ensureMsgf(OriginalSoundWave->GetName() != NewObjectName, TEXT("ASSERT: [%i] %hs:\n'NewObjectName' is the same as 'OriginalSoundWave' name!: %s"), __LINE__, __FUNCTION__, *NewObjectName))
+	{
+		return nullptr;
+	}
+
+	// Get the original package name and create a new package within the same directory
+	const FString OriginalPackagePath = FPackageName::GetLongPackagePath(OriginalSoundWave->GetOutermost()->GetName());
+	const FString NewPackageName = FString::Printf(TEXT("%s/%s"), *OriginalPackagePath, *NewObjectName);
+	UPackage* DuplicatedPackage = CreatePackage(*NewPackageName);
+
+	// Duplicate the sound wave
+	USoundWave* DuplicatedSoundWave = Cast<USoundWave>(StaticDuplicateObject(OriginalSoundWave, DuplicatedPackage, *NewObjectName));
+
+	if (!DuplicatedSoundWave)
+	{
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to duplicate %s. Using original sound wave instead."), *OriginalSoundWave->GetName());
+		return OriginalSoundWave;
+	}
+
+	// Complete the duplication process
+	DuplicatedSoundWave->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(DuplicatedSoundWave);
+
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Duplicated sound wave %s to %s"), *OriginalSoundWave->GetName(), *NewObjectName);
+
+	return DuplicatedSoundWave;
+}
+
 // Reimports an audio file into the original sound wave asset in Unreal Engine
 bool UAudioTrimmerUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundWave, const FString& TrimmedAudioFilePath)
 {
@@ -310,21 +374,8 @@ void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection
 		return;
 	}
 
-	const USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
-	if (!SoundWave)
-	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid SoundWave in AudioSection."));
-		return;
-	}
-
 	AudioSection->SetStartOffset(0);
 	AudioSection->SetLooping(false);
-
-	// Adjust the section duration to match the trimmed audio duration
-	const FFrameRate TickResolution = AudioSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
-	const FFrameTime NewEndFrameTime = FFrameTime::FromDecimal(SoundWave->Duration * TickResolution.AsDecimal());
-	const FFrameNumber NewEndFrame = AudioSection->GetInclusiveStartFrame() + NewEndFrameTime.GetFrame();
-	AudioSection->SetEndFrame(NewEndFrame);
 
 	AudioSection->MarkAsChanged();
 
@@ -336,7 +387,7 @@ void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection
 	}
 
 	// Log the operation
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Reset Start Frame Offset and adjusted duration for section using sound: %s"), *SoundWave->GetName());
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Reset Start Frame Offset and adjusted duration for section using sound: %s"), *GetNameSafe(AudioSection->GetSound()));
 }
 
 // Deletes a temporary WAV file from the file system

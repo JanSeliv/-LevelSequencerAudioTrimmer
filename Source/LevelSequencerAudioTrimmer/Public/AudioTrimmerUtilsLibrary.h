@@ -28,10 +28,9 @@ public:
 	static void RunLevelSequenceAudioTrimmer(const ULevelSequence* LevelSequence);
 
 	/** Retrieves all audio sections from the given level sequence.
-	 * @param LevelSequence The level sequence to search for audio sections.
-	 * @return Array of UMovieSceneAudioSection objects found within the level sequence. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static TArray<UMovieSceneAudioSection*> GetAudioSections(const ULevelSequence* LevelSequence);
+	 * @param OutMap Returns a map of sound waves to their corresponding audio sections, where the same sound wave can be used in multiple audio sections.
+	 * @param InLevelSequence The level sequence to search for audio sections. */
+	static void FindAudioSectionsInLevelSequence(TMap<USoundWave*, TArray<UMovieSceneAudioSection*>>& OutMap, const ULevelSequence* InLevelSequence);
 
 	/** Calculates the start and end times in milliseconds for trimming an audio section.
 	 * @param LevelSequence The level sequence containing the audio section.
@@ -53,6 +52,14 @@ public:
 	 * @return The file path to the exported WAV file. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
 	static FString ExportSoundWaveToWav(USoundWave* SoundWave);
+
+	/** Duplicates the given SoundWave asset, incrementing an index to its name.
+	 * Useful for handling multiple instances of the same audio with different trim times.
+	 * @param OriginalSoundWave The original SoundWave asset to duplicate.
+	 * @param DuplicateIndex The index to append to the duplicated asset's name.
+	 * @return A pointer to the duplicated SoundWave asset.*/
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex);
 
 	/** Reimports an audio file into the original sound wave asset in Unreal Engine.
 	 * @param OriginalSoundWave The original sound wave asset to be reimported.
