@@ -163,7 +163,7 @@ FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* L
 	// Calculate the effective end time within the audio asset
 	float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
 
-	const USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
+	USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
 	if (!SoundWave)
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("SoundWave is null or invalid."));
@@ -196,6 +196,7 @@ FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* L
 	// Calculate the start and end times in milliseconds
 	TrimTimes.StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
 	TrimTimes.EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
+	TrimTimes.SoundWave = SoundWave;
 
 	// Calculate the usage duration in milliseconds
 	const int32 UsageDurationMs = TrimTimes.EndTimeMs - TrimTimes.StartTimeMs;

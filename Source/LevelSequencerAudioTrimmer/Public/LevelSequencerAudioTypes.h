@@ -6,6 +6,8 @@
 //---
 #include "LevelSequencerAudioTypes.generated.h"
 
+class USoundWave;
+
 /**
  * Represents the start and end times in milliseconds for trimming an audio section.
  */
@@ -15,7 +17,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimes
 	GENERATED_BODY()
 
 	FTrimTimes() = default;
-	FTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs);
+	FTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave);
 
 	/** Invalid trim times. */
 	static const FTrimTimes Invalid;
@@ -27,6 +29,10 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimes
 	/** End time in milliseconds to trim to. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	int32 EndTimeMs = 0;
+
+	/** The sound wave associated with these trim times. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
+	TObjectPtr<USoundWave> SoundWave = nullptr;
 
 	/** Returns true if the start and end times are valid. */
 	bool IsValid() const;
