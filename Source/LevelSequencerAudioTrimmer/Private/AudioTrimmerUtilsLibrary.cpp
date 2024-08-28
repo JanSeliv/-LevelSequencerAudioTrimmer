@@ -30,6 +30,37 @@
 // Runs the audio trimmer for given level sequence
 void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequence* LevelSequence)
 {
+	/*
+	[Example Data] Let's assume we have the following sounds and audio sections in the level sequence:
+	- SW_Ball is used twice: AudioSection0[15-30], AudioSection1[15-30]
+	- SW_Step is used three times: AudioSection2[7-10], AudioSection3[7-10], AudioSection4[18-25]
+
+	[PreprocessedTrimTimesMap] Illustrates how Example Data is iterated and processed:
+	|
+	|-- SW_Ball
+	|    |-- TrimTimes(SW_Ball[15-30])
+	|        |-- AudioSection0  -> Trim and reimport directly to SW_Ball
+	|        |-- AudioSection1  -> Reuse trimmed SW_Ball
+	|
+	|-- SW_Step
+		 |-- TrimTimes(SW_Step[7-10])
+		 |    |-- AudioSection2  -> Duplicate to SW_Step1, then trim and reimport to SW_Step1
+		 |    |-- AudioSection3  -> Reuse trimmed SW_Step1
+		 |
+		 |-- TrimTimes(SW_Step[18-25])
+			  |-- AudioSection4 -> Trim and reimport directly to SW_Step
+
+	[Flow] Outlines the order of function calls:
+	1. FindAudioSectionsInLevelSequence ➔ Map sound waves to audio sections.
+	2. CalculateTrimTimes ➔ Determine trim times for each section.
+	3. ExportSoundWaveToWav ➔ Convert sound wave into a WAV file.
+	4. TrimAudio ➔ Apply trimming to the WAV file.
+	5. DuplicateSoundWave ➔ Duplicate sound waves when needed.
+	6. ReimportAudioToUnreal ➔ Load the trimmed WAV file back into the engine.
+	7. ResetTrimmedAudioSection ➔ Update audio section with the new sound.
+	8. DeleteTempWavFile ➔ Remove the temporary WAV file.
+	*/
+
 	// Retrieve audio sections mapped by SoundWave from the Level Sequence
 	TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> AudioSectionsMap;
 	FindAudioSectionsInLevelSequence(AudioSectionsMap, LevelSequence);
@@ -42,63 +73,100 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves."), AudioSectionsMap.Num());
 
+	// Preprocess all Trim Times
+	TMap<USoundWave*, TMap<FTrimTimes, TArray<UMovieSceneAudioSection*>>> PreprocessedTrimTimesMap;
 	for (const TTuple<USoundWave*, TArray<UMovieSceneAudioSection*>>& It : AudioSectionsMap)
 	{
 		USoundWave* OriginalSoundWave = It.Key;
 		const TArray<UMovieSceneAudioSection*>& Sections = It.Value;
 
-		for (int32 Index = 0; Index < Sections.Num(); ++Index)
+		for (UMovieSceneAudioSection* AudioSection : Sections)
 		{
-			UMovieSceneAudioSection* AudioSection = Sections[Index];
-			USoundWave* SoundWave = OriginalSoundWave;
-
-			// Calculate trim times and check if the section should be processed
-			const FTrimTimes TrimTimes = CalculateTrimTimes(LevelSequence, AudioSection);
+			FTrimTimes TrimTimes = CalculateTrimTimes(LevelSequence, AudioSection);
 			if (!TrimTimes.IsValid())
 			{
 				continue;
 			}
 
-			// Duplicate the sound wave if it's not the last section using it
-			if (Index < Sections.Num() - 1)
+			TrimTimes.SoundWave = OriginalSoundWave; // Associate the SoundWave with the TrimTimes
+			PreprocessedTrimTimesMap.FindOrAdd(OriginalSoundWave).FindOrAdd(TrimTimes).Add(AudioSection);
+		}
+	}
+
+	if (PreprocessedTrimTimesMap.IsEmpty())
+	{
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("No valid trim times found in the level sequence."));
+		return;
+	}
+
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), PreprocessedTrimTimesMap.Num());
+
+	// Iterate over the preprocessed trim times map
+	for (const TTuple<USoundWave*, TMap<FTrimTimes, TArray<UMovieSceneAudioSection*>>>& OuterIt : PreprocessedTrimTimesMap)
+	{
+		USoundWave* const OriginalSoundWave = OuterIt.Key;
+		const TMap<FTrimTimes, TArray<UMovieSceneAudioSection*>>& InnerMap = OuterIt.Value;
+
+		int32 GroupIndex = 0;
+		for (const TTuple<FTrimTimes, TArray<UMovieSceneAudioSection*>>& InnerIt : InnerMap)
+		{
+			const FTrimTimes& TrimTimes = InnerIt.Key;
+			const TArray<UMovieSceneAudioSection*>& Sections = InnerIt.Value;
+			USoundWave* TrimmedSoundWave = OriginalSoundWave;
+
+			if (GroupIndex < InnerMap.Num() - 1)
 			{
-				SoundWave = DuplicateSoundWave(SoundWave, Index + 1);
-				AudioSection->SetSound(SoundWave);
+				// Duplicate sound wave for different timings, so trimmed sound will be reimported in the duplicated sound wave
+				// In this way, original sound will not change until the last group
+				TrimmedSoundWave = DuplicateSoundWave(TrimmedSoundWave, GroupIndex + 1);
 			}
 
-			// Export the sound wave to a temporary WAV file
-			const FString ExportPath = ExportSoundWaveToWav(SoundWave);
-			if (ExportPath.IsEmpty())
+			// Process only the first section in this group
+			bool bReuseFurtherSections = false;
+			for (UMovieSceneAudioSection* Section : Sections)
 			{
-				UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export %s"), *SoundWave->GetName());
-				continue;
-			}
-
-			const FString TrimmedAudioPath = FPaths::ChangeExtension(ExportPath, TEXT("_trimmed.wav"));
-
-			// Trim the audio using the C++ function
-			if (!TrimAudio(TrimTimes, ExportPath, TrimmedAudioPath))
-			{
-				UE_LOG(LogAudioTrimmer, Warning, TEXT("Trimming audio failed for %s"), *SoundWave->GetName());
-				continue;
-			}
-
-			// Only reimport the trimmed audio for the last section using the original sound wave
-			if (Index == Sections.Num() - 1)
-			{
-				if (!ReimportAudioToUnreal(SoundWave, TrimmedAudioPath))
+				if (bReuseFurtherSections)
 				{
-					UE_LOG(LogAudioTrimmer, Warning, TEXT("Reimporting trimmed audio failed for %s"), *SoundWave->GetName());
+					// No need to fully process other sections, just reuse already trimmer sound wave 
+					ResetTrimmedAudioSection(Section, TrimmedSoundWave);
 					continue;
 				}
+
+				// Export the sound wave to a temporary WAV file
+				const FString ExportPath = ExportSoundWaveToWav(TrimmedSoundWave);
+				if (ExportPath.IsEmpty())
+				{
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export %s"), *TrimmedSoundWave->GetName());
+					continue;
+				}
+
+				const FString TrimmedAudioPath = FPaths::ChangeExtension(ExportPath, TEXT("_trimmed.wav"));
+
+				// Trim the audio using the C++ function
+				if (!TrimAudio(TrimTimes, ExportPath, TrimmedAudioPath))
+				{
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("Trimming audio failed for %s"), *TrimmedSoundWave->GetName());
+					continue;
+				}
+
+				if (!ReimportAudioToUnreal(TrimmedSoundWave, TrimmedAudioPath))
+				{
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("Reimporting trimmed audio failed for %s"), *TrimmedSoundWave->GetName());
+					continue;
+				}
+
+				// Reset the start frame offset for this audio section
+				ResetTrimmedAudioSection(Section, TrimmedSoundWave);
+
+				// Delete the temporary exported WAV file
+				DeleteTempWavFile(ExportPath);
+				DeleteTempWavFile(TrimmedAudioPath);
+
+				// Mark that the first section has been processed
+				bReuseFurtherSections = true;
 			}
 
-			// Reset the Start Frame Offset for this audio section
-			ResetTrimmedAudioSection(AudioSection);
-
-			// Delete the temporary exported WAV file
-			DeleteTempWavFile(ExportPath);
-			DeleteTempWavFile(TrimmedAudioPath);
+			GroupIndex++;
 		}
 	}
 
@@ -366,21 +434,21 @@ bool UAudioTrimmerUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundW
 	return true;
 }
 
-// Resets the start frame offset of an audio section to zero
-void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection)
+// Resets the start frame offset of an audio section to 0 and sets a new sound wave
+void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* NewSound)
 {
-	if (!AudioSection)
+	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__)
+		|| !ensureMsgf(NewSound, TEXT("ASSERT: [%i] %hs:\n'NewSound' is not valid!"), __LINE__, __FUNCTION__))
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid AudioSection."));
 		return;
 	}
 
+	AudioSection->SetSound(NewSound);
 	AudioSection->SetStartOffset(0);
 	AudioSection->SetLooping(false);
 
+	// Mark as modified
 	AudioSection->MarkAsChanged();
-
-	// Mark the movie scene as modified
 	const UMovieScene* MovieScene = AudioSection->GetTypedOuter<UMovieScene>();
 	if (MovieScene)
 	{

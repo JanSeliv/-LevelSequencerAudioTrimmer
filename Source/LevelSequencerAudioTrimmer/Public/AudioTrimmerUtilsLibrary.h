@@ -23,7 +23,10 @@ class LEVELSEQUENCERAUDIOTRIMMERED_API UAudioTrimmerUtilsLibrary : public UBluep
 	GENERATED_BODY()
 
 public:
-	/** Runs the audio trimmer for given level sequence. */
+	/** Runs the audio trimmer for the given level sequence.
+	 * - Trims audio assets based on their usage in given Level Sequence to reduce the file size.
+	 * - Reuses already trimmed audio assets if they are used multiple times with the same trim times.
+	 * - Duplicates sound waves if needed to handle multiple instances of the same audio with different trim times. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
 	static void RunLevelSequenceAudioTrimmer(const ULevelSequence* LevelSequence);
 
@@ -68,10 +71,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
 	static bool ReimportAudioToUnreal(USoundWave* OriginalSoundWave, const FString& TrimmedAudioFilePath);
 
-	/** Resets the start frame offset of an audio section to zero.
-	 * @param AudioSection The audio section to modify. */
+	/** Resets the start frame offset of an audio section to 0 and sets a new sound wave.
+	 * @param AudioSection The audio section to modify.
+	 * @param NewSound The new sound wave to set for the audio section. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static void ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection);
+	static void ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* NewSound);
 
 	/** Deletes a temporary WAV file from the file system. * 
 	 * @param FilePath The file path of the WAV file to delete.
