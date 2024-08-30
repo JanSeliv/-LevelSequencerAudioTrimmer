@@ -14,6 +14,9 @@ struct FTrimTimes;
 
 DEFINE_LOG_CATEGORY_STATIC(LogAudioTrimmer, Log, All);
 
+typedef TMap<FTrimTimes, TArray<UMovieSceneAudioSection*>> FTrimTimesMap;
+typedef TMap<USoundWave*, FTrimTimesMap> FSoundWaveTrimTimesMap;
+
 /**
  * Utility library for handling audio trimming and reimporting in Unreal Engine.
  */
@@ -34,6 +37,18 @@ public:
 	 * @param OutMap Returns a map of sound waves to their corresponding audio sections, where the same sound wave can be used in multiple audio sections.
 	 * @param InLevelSequence The level sequence to search for audio sections. */
 	static void FindAudioSectionsInLevelSequence(TMap<USoundWave*, TArray<UMovieSceneAudioSection*>>& OutMap, const ULevelSequence* InLevelSequence);
+
+	/** Finds all assets that directly reference the given sound wave.
+	* @param OutUsages Returns the found assets that reference the sound wave.
+	* @param InSound The sound wave asset to find usages for. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	static void FindAudioUsagesBySoundAsset(TArray<UObject*>& OutUsages, const USoundWave* InSound);
+
+	/** Aggregates trim times for sound waves in the main level sequence and usages of the sound waves in other sequences.
+	 * Combines trim times, where the same sound wave is used across multiple sequences.
+	 * @param OutTrimTimesMap Combines and returns a map of sound waves to their corresponding trim times.
+	 * @param LevelSequence The main level sequence to search for audio sections. */
+	static void PreprocessTrimTimes(FSoundWaveTrimTimesMap& OutTrimTimesMap, const ULevelSequence* LevelSequence);
 
 	/** Calculates the start and end times in milliseconds for trimming an audio section.
 	 * @param LevelSequence The level sequence containing the audio section.
