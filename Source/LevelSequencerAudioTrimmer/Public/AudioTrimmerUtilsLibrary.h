@@ -65,6 +65,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer", meta = (AutoCreateRefTerm = "TrimTimes", InputPath, OutputPath))
 	static bool TrimAudio(const FTrimTimes& TrimTimes, const FString& InputPath, const FString& OutputPath);
 
+	/** Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints.
+     * @param InOutTrimTimesMap Takes the map of sound waves and modifies it if matches found with external used sounds.  */
+	static void HandleSoundsOutsideSequences(FSoundWaveTrimTimesMap& InOutTrimTimesMap);
+
 	/** Exports a sound wave to a WAV file.
 	 * @param SoundWave The sound wave to export.
 	 * @return The file path to the exported WAV file. */
@@ -77,7 +81,7 @@ public:
 	 * @param DuplicateIndex The index to append to the duplicated asset's name.
 	 * @return A pointer to the duplicated SoundWave asset.*/
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex);
+	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex = 1);
 
 	/** Reimports an audio file into the original sound wave asset in Unreal Engine.
 	 * @param OriginalSoundWave The original sound wave asset to be reimported.
