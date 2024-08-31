@@ -51,25 +51,29 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 			  |-- AudioSection4 -> Trim and reimport directly to SW_Step
 
 	[Flow] Outlines the order of function calls:
-	1. PreprocessTrimTimes ➔ Aggregates trim times for sound waves in the main level sequence and usages of the sound waves in other sequences.
-	2. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
-	3. ExportSoundWaveToWav ➔ Convert sound wave into a WAV file.
-	4. TrimAudio ➔ Apply trimming to the WAV file.
-	5. DuplicateSoundWave ➔ Duplicate sound waves when needed.
-	6. ReimportAudioToUnreal ➔ Load the trimmed WAV file back into the engine.
-	7. ResetTrimmedAudioSection ➔ Update audio section with the new sound.
-	8. DeleteTempWavFile ➔ Remove the temporary WAV file.
+	1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
+	2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
+	3. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
+	4. ExportSoundWaveToWav ➔ Convert sound wave into a WAV file.
+	5. TrimAudio ➔ Apply trimming to the WAV file.
+	6. DuplicateSoundWave ➔ Duplicate sound waves when needed.
+	7. ReimportAudioToUnreal ➔ Load the trimmed WAV file back into the engine.
+	8. ResetTrimmedAudioSection ➔ Update audio section with the new sound.
+	9. DeleteTempWavFile ➔ Remove the temporary WAV file.
 	*/
 
 	// Calculate and combine trim times for sound waves in the main level sequence and usages of the sound waves in other sequences
 	FSoundWaveTrimTimesMap PreprocessedTrimTimesMap;
-	PreprocessTrimTimes(/*out*/PreprocessedTrimTimesMap, LevelSequence);
+	HandleSoundsInRequestedLevelSequence(/*out*/PreprocessedTrimTimesMap, LevelSequence);
 
 	if (PreprocessedTrimTimesMap.IsEmpty())
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("No valid trim times found in the level sequence."));
 		return;
 	}
+
+	// Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences
+	HandleSoundsInOtherSequences(/*InOut*/PreprocessedTrimTimesMap);
 
 	// Handle sound waves that are used outside of level sequences like in the world or blueprints
 	HandleSoundsOutsideSequences(/*InOut*/PreprocessedTrimTimesMap);
@@ -213,37 +217,18 @@ void UAudioTrimmerUtilsLibrary::FindAudioUsagesBySoundAsset(TArray<UObject*>& Ou
 	}
 }
 
-// Aggregates trim times for sound waves in the main level sequence and usages of the sound waves in other sequences
-void UAudioTrimmerUtilsLibrary::PreprocessTrimTimes(FSoundWaveTrimTimesMap& OutTrimTimesMap, const ULevelSequence* LevelSequence)
+// Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
+void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundWaveTrimTimesMap& OutSoundsTrimTimesMap, const ULevelSequence* LevelSequence)
 {
 	if (!ensureMsgf(LevelSequence, TEXT("ASSERT: [%i] %hs:\n'LevelSequence' is not valid!"), __LINE__, __FUNCTION__))
 	{
 		return;
 	}
 
-	if (!OutTrimTimesMap.IsEmpty())
+	if (!OutSoundsTrimTimesMap.IsEmpty())
 	{
-		OutTrimTimesMap.Empty();
+		OutSoundsTrimTimesMap.Empty();
 	}
-
-	auto CalculateAndCombineTrimTimes = [&](USoundWave* SoundWave, const TArray<UMovieSceneAudioSection*>& AudioSections, const ULevelSequence* OtherLevelSequence)
-	{
-		FTrimTimesMap& TrimTimesMap = OutTrimTimesMap.FindOrAdd(SoundWave);
-		for (UMovieSceneAudioSection* AudioSection : AudioSections)
-		{
-			if (!AudioSection)
-			{
-				continue;
-			}
-
-			FTrimTimes TrimTimes = CalculateTrimTimes(OtherLevelSequence, AudioSection);
-			if (TrimTimes.IsValid())
-			{
-				TrimTimes.SoundWave = SoundWave;
-				TrimTimesMap.FindOrAdd(TrimTimes).AddUnique(AudioSection);
-			}
-		}
-	};
 
 	// Retrieve audio sections mapped by SoundWave from the main Level Sequence
 	TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> MainAudioSectionsMap;
@@ -263,40 +248,34 @@ void UAudioTrimmerUtilsLibrary::PreprocessTrimTimes(FSoundWaveTrimTimesMap& OutT
 		const TArray<UMovieSceneAudioSection*>& MainSections = It.Value;
 
 		// Calculate and combine trim times for the main sequence
-		CalculateAndCombineTrimTimes(OriginalSoundWave, MainSections, LevelSequence);
+		FTrimTimesMap& TrimTimesMap = OutSoundsTrimTimesMap.FindOrAdd(OriginalSoundWave);
+		CalculateTrimTimes(TrimTimesMap, MainSections);
+	}
+}
 
-		// Find other level sequences where the sound wave is used
-		TArray<UObject*> OutUsages;
-		FindAudioUsagesBySoundAsset(OutUsages, OriginalSoundWave);
-
-		for (UObject* Usage : OutUsages)
+// Calculates the start and end times in milliseconds for trimming multiple audio sections
+void UAudioTrimmerUtilsLibrary::CalculateTrimTimes(FTrimTimesMap& OutTrimTimesMap, const TArray<UMovieSceneAudioSection*>& AudioSections)
+{
+	for (UMovieSceneAudioSection* AudioSection : AudioSections)
+	{
+		if (!AudioSection)
 		{
-			const ULevelSequence* OtherLevelSequence = Cast<ULevelSequence>(Usage);
-			if (!OtherLevelSequence
-				|| OtherLevelSequence == LevelSequence)
-			{
-				continue;
-			}
+			continue;
+		}
 
-			// Retrieve audio sections for the sound wave in the other level sequence
-			TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> OtherAudioSectionsMap;
-			FindAudioSectionsInLevelSequence(OtherAudioSectionsMap, OtherLevelSequence);
-
-			if (const TArray<UMovieSceneAudioSection*>* OtherSectionsPtr = OtherAudioSectionsMap.Find(OriginalSoundWave))
-			{
-				// Calculate and combine trim times for the other level sequences
-				CalculateAndCombineTrimTimes(OriginalSoundWave, *OtherSectionsPtr, OtherLevelSequence);
-			}
+		FTrimTimes TrimTimes = CalculateTrimTimes(AudioSection);
+		if (TrimTimes.IsValid())
+		{
+			OutTrimTimesMap.FindOrAdd(TrimTimes).AddUnique(AudioSection);
 		}
 	}
 }
 
 //Calculates the start and end times in milliseconds for trimming an audio section
-FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* LevelSequence, UMovieSceneAudioSection* AudioSection)
+FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimes(UMovieSceneAudioSection* AudioSection)
 {
-	FTrimTimes TrimTimes;
-
-	if (!LevelSequence || !AudioSection)
+	const ULevelSequence* LevelSequence = AudioSection ? AudioSection->GetTypedOuter<ULevelSequence>() : nullptr;
+	if (!LevelSequence)
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid LevelSequence or AudioSection."));
 		return FTrimTimes::Invalid;
@@ -346,6 +325,7 @@ FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimes(const ULevelSequence* L
 	AudioEndSeconds = FMath::Min(AudioEndSeconds, TotalAudioDurationSeconds);
 
 	// Calculate the start and end times in milliseconds
+	FTrimTimes TrimTimes;
 	TrimTimes.StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
 	TrimTimes.EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
 	TrimTimes.SoundWave = SoundWave;
@@ -406,12 +386,64 @@ bool UAudioTrimmerUtilsLibrary::TrimAudio(const FTrimTimes& TrimTimes, const FSt
 	return true;
 }
 
-// Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
-void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundWaveTrimTimesMap& InOutTrimTimesMap)
+// Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences
+void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundWaveTrimTimesMap& InOutSoundsTrimTimesMap)
 {
-	for (TTuple<USoundWave*, FTrimTimesMap>& ItRef : InOutTrimTimesMap)
+	auto GetFirstLevelSequence = [](const FTrimTimesMap& InMap) -> const ULevelSequence* {
+		const TArray<UMovieSceneAudioSection*>* Sections = !InMap.IsEmpty() ? &InMap.CreateConstIterator()->Value : nullptr;
+		const UMovieSceneAudioSection* Section = !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
+		return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
+	};
+
+	for (TTuple<USoundWave*, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
 	{
-		// Find other usages of the sound wave outside of the level sequences
+		const USoundWave* OriginalSoundWave = ItRef.Key;
+		if (!OriginalSoundWave)
+		{
+			continue;
+		}
+
+		// Get first level sequence where the sound wave is used as iterator from the map
+		const ULevelSequence* OriginalLevelSequence = GetFirstLevelSequence(ItRef.Value);
+		if (!OriginalLevelSequence)
+		{
+			continue;
+		}
+
+		// Find other level sequences where the sound wave is used
+		TArray<UObject*> OutUsages;
+		FindAudioUsagesBySoundAsset(OutUsages, OriginalSoundWave);
+
+		for (UObject* Usage : OutUsages)
+		{
+			const ULevelSequence* OtherLevelSequence = Cast<ULevelSequence>(Usage);
+			if (!OtherLevelSequence
+				|| OtherLevelSequence == OriginalLevelSequence)
+			{
+				continue;
+			}
+
+			UE_LOG(LogAudioTrimmer, Log, TEXT("Found sound wave '%s' usage in other level sequence: %s, its sections will be processed as well"), *OriginalSoundWave->GetName(), *OtherLevelSequence->GetName());
+
+			// Retrieve audio sections for the sound wave in the other level sequence
+			TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> OtherAudioSectionsMap;
+			FindAudioSectionsInLevelSequence(OtherAudioSectionsMap, OtherLevelSequence);
+
+			if (const TArray<UMovieSceneAudioSection*>* OtherSectionsPtr = OtherAudioSectionsMap.Find(OriginalSoundWave))
+			{
+				// Calculate and combine trim times for the other level sequences
+				CalculateTrimTimes(ItRef.Value, *OtherSectionsPtr);
+			}
+		}
+	}
+}
+
+// Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
+void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundWaveTrimTimesMap& InOutSoundsTrimTimesMap)
+{
+	for (TTuple<USoundWave*, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
+	{
+		// Find other usages of the sound wave outside the level sequences
 		TArray<UObject*> OutUsages;
 		FindAudioUsagesBySoundAsset(OutUsages, ItRef.Key);
 
@@ -420,6 +452,10 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundWaveTrimTimes
 		{
 			continue;
 		}
+
+		// display warning that sound is used by X assets, so we can't trim original sound asset, the Duplication Policy will be applied (
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("Sound wave '%s' is used outside of level sequences by different assets (like in the world or blueprints)"
+			       ", so we can't trim original sound asset. Duplication Policy will be applied (duplicate original sound or skip processing)"), *ItRef.Key->GetName());
 
 		// We don't want to break other usages in levels and blueprints of this sound by reimporting with new timings
 		// Therefore, duplicate it and replace the original sound wave with the duplicated one in given map
