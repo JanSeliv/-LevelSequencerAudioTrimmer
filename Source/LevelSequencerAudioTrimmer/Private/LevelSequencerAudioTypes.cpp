@@ -2,7 +2,9 @@
 
 #include "LevelSequencerAudioTypes.h"
 //---
+#include "LevelSequence.h"
 #include "LevelSequencerAudioSettings.h"
+#include "Sections/MovieSceneAudioSection.h"
 //---
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LevelSequencerAudioTypes)
 
@@ -33,10 +35,36 @@ bool FTrimTimes::operator==(const FTrimTimes& Other) const
 	return IsSimilar(Other, ToleranceMs);
 }
 
+bool FAudioSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
+{
+	return AudioSections.AddUnique(AudioSection) >= 0;
+}
+
 // Hash function to TMap
 uint32 GetTypeHash(const FTrimTimes& TrimTimes)
 {
 	return GetTypeHash(TrimTimes.SoundWave) ^
 		GetTypeHash(TrimTimes.StartTimeMs) ^
 		GetTypeHash(TrimTimes.EndTimeMs);
+}
+
+// Returns the first level sequence from the audio sections container
+class ULevelSequence* FTrimTimesMap::GetFirstLevelSequence() const
+{
+	const TArray<TObjectPtr<class UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
+	const UMovieSceneAudioSection* Section = !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
+	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
+}
+
+bool FTrimTimesMap::Add(const FTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
+{
+	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
+}
+
+void FSoundsTrimTimesMap::Empty()
+{
+	if (!SoundsTrimTimesMap.IsEmpty())
+	{
+		SoundsTrimTimesMap.Empty();
+	}
 }

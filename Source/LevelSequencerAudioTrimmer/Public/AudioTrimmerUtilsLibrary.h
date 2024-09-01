@@ -11,11 +11,11 @@ class ULevelSequence;
 class USoundWave;
 
 struct FTrimTimes;
+struct FAudioSectionsContainer;
+struct FTrimTimesMap;
+struct FSoundsTrimTimesMap;
 
 DEFINE_LOG_CATEGORY_STATIC(LogAudioTrimmer, Log, All);
-
-typedef TMap<FTrimTimes, TArray<UMovieSceneAudioSection*>> FTrimTimesMap;
-typedef TMap<USoundWave*, FTrimTimesMap> FSoundsTrimTimesMap;
 
 /**
  * Utility library for handling audio trimming and reimporting in Unreal Engine.
@@ -41,14 +41,17 @@ public:
 	/** Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * @param OutSoundsTrimTimesMap Combines and returns a map of sound waves to their corresponding trim times.
 	 * @param LevelSequence The main level sequence to search for audio sections. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
 	static void HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& OutSoundsTrimTimesMap, const ULevelSequence* LevelSequence);
 
 	/** Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences.
 	* @param InOutSoundsTrimTimesMap Takes the map of sound waves and adds the trim times with sections of the sound waves that are used in other sequences. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
 	static void HandleSoundsInOtherSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap);
 
 	/** Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints.
 	 * @param InOutSoundsTrimTimesMap Takes the map of sound waves and modifies it if matches found with external used sounds.  */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
 	static void HandleSoundsOutsideSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap);
 
 	/*********************************************************************************************
@@ -61,13 +64,13 @@ public:
 	 * @param OriginalSoundWave The original SoundWave asset to duplicate.
 	 * @param DuplicateIndex The index to append to the duplicated asset's name.
 	 * @return Duplicated Sound Wave asset in the same directory as the original asset. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
 	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex = 1);
 
 	/** Exports a sound wave to a WAV file.
 	 * @param SoundWave The sound wave to export.
 	 * @return The file path to the exported WAV file. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
 	static FString ExportSoundWaveToWav(USoundWave* SoundWave);
 
 	/** Trims an audio file to the specified start and end times.
@@ -75,14 +78,14 @@ public:
 	 * @param InputPath The file path to the audio file to trim.
 	 * @param OutputPath The file path to save the trimmed audio file.
 	 * @return True if the audio was successfully trimmed, false otherwise. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer", meta = (AutoCreateRefTerm = "TrimTimes", InputPath, OutputPath))
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow", meta = (AutoCreateRefTerm = "TrimTimes,InputPath,OutputPath"))
 	static bool TrimAudio(const FTrimTimes& TrimTimes, const FString& InputPath, const FString& OutputPath);
 
 	/** Reimports an audio file into the original sound wave asset in Unreal Engine.
 	 * @param OriginalSoundWave The original sound wave asset to be reimported.
 	 * @param TrimmedAudioFilePath The file path to the trimmed audio file.
 	 * @return True if the reimport was successful, false otherwise. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow", meta = (AutoCreateRefTerm = "TrimmedAudioFilePath"))
 	static bool ReimportAudioToUnreal(USoundWave* OriginalSoundWave, const FString& TrimmedAudioFilePath);
 
 	/** Resets the start frame offset of an audio section to 0 and sets a new sound wave.
@@ -94,7 +97,7 @@ public:
 	/** Deletes a temporary WAV file from the file system. * 
 	 * @param FilePath The file path of the WAV file to delete.
 	 * @return True if the file was successfully deleted, false otherwise. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow", meta = (AutoCreateRefTerm = "FilePath"))
 	static bool DeleteTempWavFile(const FString& FilePath);
 
 	/*********************************************************************************************
@@ -104,22 +107,24 @@ public:
 	/** Retrieves all audio sections from the given level sequence.
 	 * @param OutMap Returns a map of sound waves to their corresponding audio sections, where the same sound wave can be used in multiple audio sections.
 	 * @param InLevelSequence The level sequence to search for audio sections. */
-	static void FindAudioSectionsInLevelSequence(TMap<USoundWave*, TArray<UMovieSceneAudioSection*>>& OutMap, const ULevelSequence* InLevelSequence);
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static void FindAudioSectionsInLevelSequence(TMap<USoundWave*, FAudioSectionsContainer>& OutMap, const ULevelSequence* InLevelSequence);
 
 	/** Finds all assets that directly reference the given sound wave.
 	* @param OutUsages Returns the found assets that reference the sound wave.
 	* @param InSound The sound wave asset to find usages for. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
 	static void FindAudioUsagesBySoundAsset(TArray<UObject*>& OutUsages, const USoundWave* InSound);
 
 	/** Calculates the start and end times in milliseconds for trimming multiple audio sections.
 	 * @param OutTrimTimesMap Returns a map of audio sections to their corresponding trim times.
 	 * @param AudioSections The audio sections to calculate trim times for. */
-	static void CalculateTrimTimes(FTrimTimesMap& OutTrimTimesMap, const TArray<UMovieSceneAudioSection*>& AudioSections);
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities", meta = (AutoCreateRefTerm = "AudioSections"))
+	static void CalculateTrimTimesInAllSections(FTrimTimesMap& OutTrimTimesMap, const FAudioSectionsContainer& AudioSections);
 
 	/** Calculates the start and end times in milliseconds for trimming an audio section.
 	 * @param AudioSection The audio section to calculate trim times for.
 	 * @return A struct containing the start and end times in milliseconds. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static FTrimTimes CalculateTrimTimes(UMovieSceneAudioSection* AudioSection);
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
+	static FTrimTimes CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection);
 };

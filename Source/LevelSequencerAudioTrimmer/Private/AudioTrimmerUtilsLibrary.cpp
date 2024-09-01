@@ -68,16 +68,16 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 	 * [SoundsTrimTimesMap] - Illustrates how Example Data is iterated and processed:
 	 * |
 	 * |-- SW_Ball
-	 * |    |-- TrimTimes(SW_Ball[15-30])
+	 * |    |-- [15-30] 
 	 * |        |-- AudioSection0  -> Trim and reimport directly to SW_Ball
 	 * |        |-- AudioSection1  -> Reuse trimmed SW_Ball
 	 * |
 	 * |-- SW_Step
-	 *	 	 |-- TrimTimes(SW_Step[7-10]) -> Duplicate to SW_Step1, so it won't break next SW_Step[18-25]
+	 *	 	 |-- [7-10] -> Duplicate to SW_Step1, so it won't break next [18-25]
 	 *		 |    |-- AudioSection2  -> Trim and reimport to duplicated SW_Step1
 	 *		 |    |-- AudioSection3  -> Reuse trimmed SW_Step1
 	 *		 |
-	 *		 |-- TrimTimes(SW_Step[18-25])
+	 *		 |-- [18-25]
 	 *			  |-- AudioSection4 -> Trim and reimport directly to SW_Step
 	 *
 	 * [Main Flow] - Is called after the preprocessing for each found audio:
@@ -89,16 +89,16 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 	 * 6. DeleteTempWavFile ➔ Remove the temporary WAV file.
 	 ******************************************************************************************* */
 
-	for (const TTuple<USoundWave*, FTrimTimesMap>& OuterIt : SoundsTrimTimesMap)
+	for (const TTuple<TObjectPtr<USoundWave>, FTrimTimesMap>& OuterIt : SoundsTrimTimesMap)
 	{
 		USoundWave* const OriginalSoundWave = OuterIt.Key;
 		const FTrimTimesMap& InnerMap = OuterIt.Value;
 
 		int32 GroupIndex = 0;
-		for (const TTuple<FTrimTimes, TArray<UMovieSceneAudioSection*>>& InnerIt : InnerMap)
+		for (const TTuple<FTrimTimes, FAudioSectionsContainer>& InnerIt : InnerMap)
 		{
 			const FTrimTimes& TrimTimes = InnerIt.Key;
-			const TArray<UMovieSceneAudioSection*>& Sections = InnerIt.Value;
+			const FAudioSectionsContainer& Sections = InnerIt.Value;
 			USoundWave* TrimmedSoundWave = OriginalSoundWave;
 
 			const bool bIsBeforeLastGroup = GroupIndex < InnerMap.Num() - 1;
@@ -106,8 +106,8 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 			{
 				/* Duplicate sound wave for different timings, so trimmed sound will be reimported in the duplicated sound wave
 				 *	SW_Step
-				 *	 |-- TrimTimes(SW_Step[7-10]) -> HERE: duplicate to SW_Step1, so it won't break next SW_Step[18-25]
-				 *	 |-- TrimTimes(SW_Step[18-25]) */
+				 *	 |-- [7-10] -> HERE: duplicate to SW_Step1, so it won't break next SW_Step[18-25]
+				 *	 |-- [18-25] */
 				TrimmedSoundWave = DuplicateSoundWave(TrimmedSoundWave, GroupIndex + 1);
 
 				// Fall through to process duplicated sound wave
@@ -151,7 +151,7 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
 					continue;
 				}
 
-				// Reset the start frame offset for this audio section
+				// Reset the start frame offset for this an audio section
 				ResetTrimmedAudioSection(Section, TrimmedSoundWave);
 
 				// Delete the temporary exported WAV file
@@ -181,13 +181,10 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrim
 		return;
 	}
 
-	if (!OutSoundsTrimTimesMap.IsEmpty())
-	{
-		OutSoundsTrimTimesMap.Empty();
-	}
+	OutSoundsTrimTimesMap.Empty();
 
 	// Retrieve audio sections mapped by SoundWave from the main Level Sequence
-	TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> MainAudioSectionsMap;
+	TMap<USoundWave*, FAudioSectionsContainer> MainAudioSectionsMap;
 	FindAudioSectionsInLevelSequence(MainAudioSectionsMap, LevelSequence);
 
 	if (MainAudioSectionsMap.IsEmpty())
@@ -198,27 +195,21 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrim
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves in the main sequence."), MainAudioSectionsMap.Num());
 
-	for (const TTuple<USoundWave*, TArray<UMovieSceneAudioSection*>>& It : MainAudioSectionsMap)
+	for (const TTuple<USoundWave*, FAudioSectionsContainer>& It : MainAudioSectionsMap)
 	{
 		USoundWave* OriginalSoundWave = It.Key;
-		const TArray<UMovieSceneAudioSection*>& MainSections = It.Value;
+		const FAudioSectionsContainer& MainSections = It.Value;
 
 		// Calculate and combine trim times for the main sequence
 		FTrimTimesMap& TrimTimesMap = OutSoundsTrimTimesMap.FindOrAdd(OriginalSoundWave);
-		CalculateTrimTimes(TrimTimesMap, MainSections);
+		CalculateTrimTimesInAllSections(TrimTimesMap, MainSections);
 	}
 }
 
 // Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences
 void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap)
 {
-	auto GetFirstLevelSequence = [](const FTrimTimesMap& InMap) -> const ULevelSequence* {
-		const TArray<UMovieSceneAudioSection*>* Sections = !InMap.IsEmpty() ? &InMap.CreateConstIterator()->Value : nullptr;
-		const UMovieSceneAudioSection* Section = !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
-		return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
-	};
-
-	for (TTuple<USoundWave*, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
+	for (TTuple<TObjectPtr<USoundWave>, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
 	{
 		const USoundWave* OriginalSoundWave = ItRef.Key;
 		if (!OriginalSoundWave)
@@ -227,7 +218,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap
 		}
 
 		// Get first level sequence where the sound wave is used as iterator from the map
-		const ULevelSequence* OriginalLevelSequence = GetFirstLevelSequence(ItRef.Value);
+		const ULevelSequence* OriginalLevelSequence = ItRef.Value.GetFirstLevelSequence();
 		if (!OriginalLevelSequence)
 		{
 			continue;
@@ -249,13 +240,13 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap
 			UE_LOG(LogAudioTrimmer, Log, TEXT("Found sound wave '%s' usage in other level sequence: %s, its sections will be processed as well"), *OriginalSoundWave->GetName(), *OtherLevelSequence->GetName());
 
 			// Retrieve audio sections for the sound wave in the other level sequence
-			TMap<USoundWave*, TArray<UMovieSceneAudioSection*>> OtherAudioSectionsMap;
+			TMap<USoundWave*, FAudioSectionsContainer> OtherAudioSectionsMap;
 			FindAudioSectionsInLevelSequence(OtherAudioSectionsMap, OtherLevelSequence);
 
-			if (const TArray<UMovieSceneAudioSection*>* OtherSectionsPtr = OtherAudioSectionsMap.Find(OriginalSoundWave))
+			if (const FAudioSectionsContainer* OtherSectionsPtr = OtherAudioSectionsMap.Find(OriginalSoundWave))
 			{
 				// Calculate and combine trim times for the other level sequences
-				CalculateTrimTimes(ItRef.Value, *OtherSectionsPtr);
+				CalculateTrimTimesInAllSections(ItRef.Value, *OtherSectionsPtr);
 			}
 		}
 	}
@@ -264,7 +255,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap
 // Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
 void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap)
 {
-	for (TTuple<USoundWave*, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
+	for (TTuple<TObjectPtr<USoundWave>, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
 	{
 		// Find other usages of the sound wave outside the level sequences
 		TArray<UObject*> OutUsages;
@@ -285,7 +276,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundsTrimTimesMap
 		USoundWave* DuplicatedSoundWave = DuplicateSoundWave(ItRef.Key);
 		checkf(DuplicatedSoundWave, TEXT("ERROR: [%i] %hs:\n'DuplicatedSoundWave' failed to Duplicate!"), __LINE__, __FUNCTION__);
 		ItRef.Key = DuplicatedSoundWave;
-		for (TTuple<FTrimTimes, TArray<UMovieSceneAudioSection*>>& InnerItRef : ItRef.Value)
+		for (TTuple<FTrimTimes, FAudioSectionsContainer>& InnerItRef : ItRef.Value)
 		{
 			InnerItRef.Key.SoundWave = DuplicatedSoundWave;
 			for (UMovieSceneAudioSection* SectionIt : InnerItRef.Value)
@@ -495,7 +486,7 @@ bool UAudioTrimmerUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
  ********************************************************************************************* */
 
 // Retrieves all audio sections from the given level sequence
-void UAudioTrimmerUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, TArray<UMovieSceneAudioSection*>>& OutMap, const ULevelSequence* InLevelSequence)
+void UAudioTrimmerUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, FAudioSectionsContainer>& OutMap, const ULevelSequence* InLevelSequence)
 {
 	if (!InLevelSequence)
 	{
@@ -522,7 +513,7 @@ void UAudioTrimmerUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave
 			USoundWave* SoundWave = AudioSection ? Cast<USoundWave>(AudioSection->GetSound()) : nullptr;
 			if (SoundWave)
 			{
-				OutMap.FindOrAdd(SoundWave).AddUnique(AudioSection);
+				OutMap.FindOrAdd(SoundWave).Add(AudioSection);
 			}
 		}
 	}
@@ -560,7 +551,7 @@ void UAudioTrimmerUtilsLibrary::FindAudioUsagesBySoundAsset(TArray<UObject*>& Ou
 }
 
 // Calculates the start and end times in milliseconds for trimming multiple audio sections
-void UAudioTrimmerUtilsLibrary::CalculateTrimTimes(FTrimTimesMap& OutTrimTimesMap, const TArray<UMovieSceneAudioSection*>& AudioSections)
+void UAudioTrimmerUtilsLibrary::CalculateTrimTimesInAllSections(FTrimTimesMap& OutTrimTimesMap, const FAudioSectionsContainer& AudioSections)
 {
 	for (UMovieSceneAudioSection* AudioSection : AudioSections)
 	{
@@ -569,16 +560,16 @@ void UAudioTrimmerUtilsLibrary::CalculateTrimTimes(FTrimTimesMap& OutTrimTimesMa
 			continue;
 		}
 
-		FTrimTimes TrimTimes = CalculateTrimTimes(AudioSection);
+		FTrimTimes TrimTimes = CalculateTrimTimesInSection(AudioSection);
 		if (TrimTimes.IsValid())
 		{
-			OutTrimTimesMap.FindOrAdd(TrimTimes).AddUnique(AudioSection);
+			OutTrimTimesMap.Add(TrimTimes, AudioSection);
 		}
 	}
 }
 
 //Calculates the start and end times in milliseconds for trimming an audio section
-FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimes(UMovieSceneAudioSection* AudioSection)
+FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection)
 {
 	const ULevelSequence* LevelSequence = AudioSection ? AudioSection->GetTypedOuter<ULevelSequence>() : nullptr;
 	if (!LevelSequence)
