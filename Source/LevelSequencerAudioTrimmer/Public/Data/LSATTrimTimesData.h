@@ -12,15 +12,15 @@ class USoundWave;
  * Represents the start and end times in milliseconds for trimming an audio section.
  */
 USTRUCT(BlueprintType)
-struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimes
+struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 {
 	GENERATED_BODY()
 
-	FTrimTimes() = default;
-	FTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave);
+	FLSATTrimTimes() = default;
+	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave);
 
 	/** Invalid trim times. */
-	static const FTrimTimes Invalid;
+	static const FLSATTrimTimes Invalid;
 
 	/** Start time in milliseconds to trim from. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
@@ -38,20 +38,20 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimes
 	bool IsValid() const;
 
 	/** Returns true if the start and end times are similar to the other trim times within the given tolerance. */
-	bool IsSimilar(const FTrimTimes& Other, int32 ToleranceMs) const;
+	bool IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) const;
 
 	/** Equal operator for comparing in TMap. */
-	bool operator==(const FTrimTimes& Other) const;
+	bool operator==(const FLSATTrimTimes& Other) const;
 
 	/** Hash function to TMap. */
-	friend LEVELSEQUENCERAUDIOTRIMMERED_API uint32 GetTypeHash(const FTrimTimes& TrimTimes);
+	friend LEVELSEQUENCERAUDIOTRIMMERED_API uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes);
 };
 
 /**
  * Contains the array of audio sections to trim.
  */
 USTRUCT(BlueprintType)
-struct LEVELSEQUENCERAUDIOTRIMMERED_API FAudioSectionsContainer
+struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
 {
 	GENERATED_BODY()
 
@@ -71,13 +71,13 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FAudioSectionsContainer
  * Represents the map of trim times to the container of audio sections to trim.
  */
 USTRUCT(BlueprintType)
-struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimesMap
+struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 {
 	GENERATED_BODY()
 
 	/** The key is the trim times, and the value is the array of audio sections to trim. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TMap<FTrimTimes, FAudioSectionsContainer> TrimTimesMap;
+	TMap<FLSATTrimTimes, FLSATSectionsContainer> TrimTimesMap;
 
 	auto begin() const { return TrimTimesMap.begin(); }
 	auto end() const { return TrimTimesMap.end(); }
@@ -85,7 +85,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimesMap
 	auto end() { return TrimTimesMap.end(); }
 
 	FORCEINLINE int32 Num() const { return TrimTimesMap.Num(); }
-	bool Add(const FTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection);
+	bool Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection);
 
 	/** Returns the first level sequence from the audio sections container. */
 	class ULevelSequence* GetFirstLevelSequence() const;
@@ -95,20 +95,20 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FTrimTimesMap
  * Represents the map of sound waves to their corresponding trim times map.
  */
 USTRUCT(BlueprintType)
-struct LEVELSEQUENCERAUDIOTRIMMERED_API FSoundsTrimTimesMap
+struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 {
 	GENERATED_BODY()
 
 	/** The key is the sound wave, and the value is the map of trim times to the container of audio sections to trim. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TMap<TObjectPtr<USoundWave>, FTrimTimesMap> SoundsTrimTimesMap;
+	TMap<TObjectPtr<USoundWave>, FLSATTrimTimesMap> TrimTimesMultiMap;
 
-	auto begin() const { return SoundsTrimTimesMap.begin(); }
-	auto end() const { return SoundsTrimTimesMap.end(); }
-	auto begin() { return SoundsTrimTimesMap.begin(); }
-	auto end() { return SoundsTrimTimesMap.end(); }
+	auto begin() const { return TrimTimesMultiMap.begin(); }
+	auto end() const { return TrimTimesMultiMap.end(); }
+	auto begin() { return TrimTimesMultiMap.begin(); }
+	auto end() { return TrimTimesMultiMap.end(); }
 
-	FORCEINLINE int32 Num() const { return SoundsTrimTimesMap.Num(); }
-	FORCEINLINE bool IsEmpty() const { return SoundsTrimTimesMap.IsEmpty(); }
-	FORCEINLINE FTrimTimesMap& FindOrAdd(USoundWave* SoundWave) { return SoundsTrimTimesMap.FindOrAdd(SoundWave); }
+	FORCEINLINE int32 Num() const { return TrimTimesMultiMap.Num(); }
+	FORCEINLINE bool IsEmpty() const { return TrimTimesMultiMap.IsEmpty(); }
+	FORCEINLINE FLSATTrimTimesMap& FindOrAdd(USoundWave* SoundWave) { return TrimTimesMultiMap.FindOrAdd(SoundWave); }
 };

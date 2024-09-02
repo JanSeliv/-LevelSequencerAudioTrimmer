@@ -9,19 +9,19 @@
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LSATTrimTimesData)
 
 /** Invalid trim times. */
-const FTrimTimes FTrimTimes::Invalid = FTrimTimes{-1, -1, nullptr};
+const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1, nullptr};
 
-FTrimTimes::FTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave)
+FLSATTrimTimes::FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave)
 	: StartTimeMs(InStartTimeMs), EndTimeMs(InEndTimeMs), SoundWave(InSoundWave) {}
 
 // Returns true if the start and end times are valid.
-bool FTrimTimes::IsValid() const
+bool FLSATTrimTimes::IsValid() const
 {
 	return StartTimeMs >= 0 && EndTimeMs >= 0 && SoundWave != nullptr;
 }
 
 // Returns true if the start and end times are similar to the other trim times within the given tolerance.
-bool FTrimTimes::IsSimilar(const FTrimTimes& Other, int32 ToleranceMs) const
+bool FLSATTrimTimes::IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) const
 {
 	return SoundWave == Other.SoundWave &&
 		FMath::Abs(StartTimeMs - Other.StartTimeMs) <= ToleranceMs &&
@@ -29,19 +29,19 @@ bool FTrimTimes::IsSimilar(const FTrimTimes& Other, int32 ToleranceMs) const
 }
 
 // Equal operator for comparing in TMap.
-bool FTrimTimes::operator==(const FTrimTimes& Other) const
+bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 {
 	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
 	return IsSimilar(Other, ToleranceMs);
 }
 
-bool FAudioSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
+bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
 {
 	return AudioSections.AddUnique(AudioSection) >= 0;
 }
 
 // Hash function to TMap
-uint32 GetTypeHash(const FTrimTimes& TrimTimes)
+uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 {
 	return GetTypeHash(TrimTimes.SoundWave) ^
 		GetTypeHash(TrimTimes.StartTimeMs) ^
@@ -49,14 +49,14 @@ uint32 GetTypeHash(const FTrimTimes& TrimTimes)
 }
 
 // Returns the first level sequence from the audio sections container
-class ULevelSequence* FTrimTimesMap::GetFirstLevelSequence() const
+class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
 {
 	const TArray<TObjectPtr<class UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
 	const UMovieSceneAudioSection* Section = !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
 	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
 }
 
-bool FTrimTimesMap::Add(const FTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
+bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
 {
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
 }
