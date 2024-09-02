@@ -2,7 +2,7 @@
 
 #include "AudioTrimmerUtilsLibrary.h"
 //---
-#include "LevelSequencerAudioTypes.h"
+#include "Data/LevelSequencerAudioTypes.h"
 //---
 #include "AssetExportTask.h"
 #include "AssetToolsModule.h"

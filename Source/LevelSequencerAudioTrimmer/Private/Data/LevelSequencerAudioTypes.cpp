@@ -1,6 +1,6 @@
 ﻿// Copyright (c) Yevhenii Selivanov
 
-#include "LevelSequencerAudioTypes.h"
+#include "Data/LevelSequencerAudioTypes.h"
 //---
 #include "LevelSequence.h"
 #include "LevelSequencerAudioSettings.h"
