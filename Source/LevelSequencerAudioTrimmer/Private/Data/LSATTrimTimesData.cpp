@@ -74,6 +74,18 @@ uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
  * FLSATSectionsContainer
  ********************************************************************************************* */
 
+// Sets the sound wave for all audio sections in this container
+void FLSATSectionsContainer::SetSound(USoundWave* SoundWave)
+{
+	for (UMovieSceneAudioSection* SectionIt : AudioSections)
+	{
+		if (SectionIt)
+		{
+			SectionIt->SetSound(SoundWave);
+		}
+	}
+}
+
 bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
 {
 	return AudioSections.AddUnique(AudioSection) >= 0;
@@ -91,11 +103,25 @@ class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
 	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
 }
 
+// Sets the sound wave for all trim times in this map
+void FLSATTrimTimesMap::SetSound(USoundWave* SoundWave)
+{
+	for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& ItRef : TrimTimesMap)
+	{
+		ItRef.Key.SoundWave = SoundWave;
+		ItRef.Value.SetSound(SoundWave);
+	}
+}
+
 bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
 {
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
 }
 
+FLSATSectionsContainer& FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, const FLSATSectionsContainer& SectionsContainer)
+{
+	return TrimTimesMap.Add(TrimTimes, SectionsContainer);
+}
 
 /*********************************************************************************************
  * FLSATTrimTimesMultiMap

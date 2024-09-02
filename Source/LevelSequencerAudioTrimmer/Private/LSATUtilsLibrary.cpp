@@ -35,8 +35,8 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 *********************************************************************************************
 	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
-	 * 3. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
-	 * 4. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
+	 * 3. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
+	 * 4. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
@@ -51,8 +51,8 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		}
 
 		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
-		HandleSoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
 		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
+		HandleSoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
 	}
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), TrimTimesMultiMap.Num());
@@ -205,7 +205,7 @@ void ULSATUtilsLibrary::HandleSoundsInRequestedLevelSequence(FLSATTrimTimesMulti
 		const FLSATSectionsContainer& MainSections = It.Value;
 
 		// Calculate and combine trim times for the main sequence
-		FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.FindOrAdd(OriginalSoundWave);
+		FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.Add(OriginalSoundWave);
 		CalculateTrimTimesInAllSections(TrimTimesMap, MainSections);
 	}
 }
@@ -256,6 +256,77 @@ void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InO
 	}
 }
 
+// Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds
+void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+{
+	TArray<USoundWave*> LoopingSounds;
+	InOutTrimTimesMultiMap.GetLoopingSounds(LoopingSounds);
+
+	if (LoopingSounds.IsEmpty())
+	{
+		return;
+	}
+
+	switch (ULSATSettings::Get().PolicyLoopingSounds)
+	{
+	case ELSATPolicyLoopingSounds::SkipAll:
+		// Looping sounds should not be processed at all for this and all other audio tracks that use the same sound wave
+		InOutTrimTimesMultiMap.Remove(LoopingSounds);
+		break;
+
+	case ELSATPolicyLoopingSounds::SkipAndDuplicate:
+		/* Section with looping sound will not be processed, but all other usages of the same sound wave will be duplicated into separate sound wave asset
+		 * SW_Background
+		 *	 |-- [3-12] -> Duplicate to SW_Background1, move [3-12] Trim Times from SW_Background to SW_Background1
+		 *	 |    |-- AudioSection2  -> Change to duplicated SW_Background1
+		 *	 |    |-- AudioSection3  -> Change to duplicated SW_Background1
+		 *	 |
+		 *	 |-- [74-15] -> Is looping, starts from 74 and ends at 15 
+		 *		  |-- AudioSection4 -> Skip: will be removed from the map
+		 */
+		for (USoundWave* LoopingSound : LoopingSounds)
+		{
+			FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.Add(LoopingSound);
+			USoundWave* DuplicatedSound = nullptr;
+
+			for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& ItRef : TrimTimesMap)
+			{
+				FLSATTrimTimes& TrimTimes = ItRef.Key;
+				FLSATSectionsContainer& SectionsContainer = ItRef.Value;
+
+				if (TrimTimes.IsLooping())
+				{
+					// Skip the looping sections
+					continue;
+				}
+
+				// Duplicate the sound wave for non-looping sections if not already done
+				if (!DuplicatedSound)
+				{
+					DuplicatedSound = DuplicateSoundWave(LoopingSound);
+				}
+
+				// Assign the duplicated sound wave to all audio sections in this trim time
+				SectionsContainer.SetSound(DuplicatedSound);
+
+				// Move the non-looping trim times to the duplicated sound wave in the map
+				InOutTrimTimesMultiMap.Add(DuplicatedSound).Add(TrimTimes, SectionsContainer);
+			}
+
+			// Remove looping sound wave from the map, all other usages were duplicated into separate sound wave asset
+			if (TrimTimesMap.IsEmpty()
+				|| DuplicatedSound)
+			{
+				InOutTrimTimesMultiMap.Remove(LoopingSound);
+			}
+		}
+		break;
+
+	default:
+		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicyLoopingSounds value!"), __LINE__, __FUNCTION__);
+	}
+}
+
 // Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
 void ULSATUtilsLibrary::HandleSoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
@@ -280,37 +351,7 @@ void ULSATUtilsLibrary::HandleSoundsOutsideSequences(FLSATTrimTimesMultiMap& InO
 		USoundWave* DuplicatedSoundWave = DuplicateSoundWave(ItRef.Key);
 		checkf(DuplicatedSoundWave, TEXT("ERROR: [%i] %hs:\n'DuplicatedSoundWave' failed to Duplicate!"), __LINE__, __FUNCTION__);
 		ItRef.Key = DuplicatedSoundWave;
-		for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& InnerItRef : ItRef.Value)
-		{
-			InnerItRef.Key.SoundWave = DuplicatedSoundWave;
-			for (UMovieSceneAudioSection* SectionIt : InnerItRef.Value)
-			{
-				checkf(SectionIt, TEXT("ERROR: [%i] %hs:\n'SectionIt' is null!"), __LINE__, __FUNCTION__);
-				SectionIt->SetSound(DuplicatedSoundWave);
-			}
-		}
-	}
-}
-
-// Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds
-void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
-{
-	TArray<USoundWave*> LoopingSounds;
-	InOutTrimTimesMultiMap.GetLoopingSounds(LoopingSounds);
-
-	if (LoopingSounds.IsEmpty())
-	{
-		return;
-	}
-
-	switch (ULSATSettings::Get().PolicyLoopingSounds)
-	{
-	case ELSATPolicyLoopingSounds::SkipAll:
-		// Looping sounds should not be processed at all for this and all other audio tracks that use the same sound wave
-		InOutTrimTimesMultiMap.Remove(LoopingSounds);
-		break;
-	default:
-		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicyLoopingSounds value!"), __LINE__, __FUNCTION__);
+		ItRef.Value.SetSound(DuplicatedSoundWave);
 	}
 }
 

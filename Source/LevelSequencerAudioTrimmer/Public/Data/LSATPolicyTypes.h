@@ -13,4 +13,6 @@ enum class ELSATPolicyLoopingSounds : uint8
 {
 	 ///< This sound wave will not be processed at all for this and all other audio tracks that use the same sound wave. 
 	 SkipAll,
+	///< Section with looping sound will not be processed, but all other usages of the same sound wave will be duplicated into separate sound wave asset.
+	SkipAndDuplicate,
 };
