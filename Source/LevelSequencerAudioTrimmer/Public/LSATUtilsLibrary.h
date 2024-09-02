@@ -56,7 +56,7 @@ public:
 	/** Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it if matches found with external used sounds.  */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
-	static void HandleSoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+	static void HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
 
 	/*********************************************************************************************
 	 * Main Flow

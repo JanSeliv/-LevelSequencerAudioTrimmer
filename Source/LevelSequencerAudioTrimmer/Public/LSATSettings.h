@@ -33,4 +33,9 @@ public:
 	* This policy might be expanded in the future containing more options like merging the looping sounds into one sound. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
 	ELSATPolicyLoopingSounds PolicyLoopingSounds;
+
+	/** Policy for handling sound waves that are used outside of level sequences, such as in the world or blueprints.
+	 * This policy might be expanded in the future with more options like use trimmed sound waves for external usage.*/
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
+	ELSATPolicySoundsOutsideSequences PolicySoundsOutsideSequences;
 };

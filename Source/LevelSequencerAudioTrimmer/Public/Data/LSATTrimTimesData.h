@@ -133,8 +133,8 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 
 	FORCEINLINE int32 Num() const { return TrimTimesMultiMap.Num(); }
 	FORCEINLINE bool IsEmpty() const { return TrimTimesMultiMap.IsEmpty(); }
-	FORCEINLINE FLSATTrimTimesMap& Add(USoundWave* SoundWave) { return TrimTimesMultiMap.FindOrAdd(SoundWave); }
-
+	FORCEINLINE FLSATTrimTimesMap& FindOrAdd(USoundWave* SoundWave) { return TrimTimesMultiMap.FindOrAdd(SoundWave); }
+	FORCEINLINE FLSATTrimTimesMap& Add(USoundWave* SoundWave, const FLSATTrimTimesMap& TrimTimesMap) { return TrimTimesMultiMap.Add(SoundWave, TrimTimesMap); }
 	void Remove(const USoundWave* SoundWave) { TrimTimesMultiMap.Remove(SoundWave); }
 	void Remove(const TArray<USoundWave*>& SoundWaves);
 };

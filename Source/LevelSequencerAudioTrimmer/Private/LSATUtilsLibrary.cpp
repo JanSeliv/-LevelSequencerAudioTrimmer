@@ -36,7 +36,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
 	 * 3. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
-	 * 4. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
+	 * 4. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
@@ -52,7 +52,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 
 		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
 		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
-		HandleSoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
+		HandlePolicySoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
 	}
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), TrimTimesMultiMap.Num());
@@ -205,7 +205,7 @@ void ULSATUtilsLibrary::HandleSoundsInRequestedLevelSequence(FLSATTrimTimesMulti
 		const FLSATSectionsContainer& MainSections = It.Value;
 
 		// Calculate and combine trim times for the main sequence
-		FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.Add(OriginalSoundWave);
+		FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.FindOrAdd(OriginalSoundWave);
 		CalculateTrimTimesInAllSections(TrimTimesMap, MainSections);
 	}
 }
@@ -278,15 +278,15 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 		/* Section with looping sound will not be processed, but all other usages of the same sound wave will be duplicated into separate sound wave asset
 		 * SW_Background
 		 *	 |-- [3-12] -> Duplicate to SW_Background1, move [3-12] Trim Times from SW_Background to SW_Background1
-		 *	 |    |-- AudioSection2  -> Change to duplicated SW_Background1
-		 *	 |    |-- AudioSection3  -> Change to duplicated SW_Background1
+		 *	 |    |-- AudioSection0  -> Change to duplicated SW_Background1
+		 *	 |    |-- AudioSection1  -> Change to duplicated SW_Background1
 		 *	 |
 		 *	 |-- [74-15] -> Is looping, starts from 74 and ends at 15 
-		 *		  |-- AudioSection4 -> Skip: will be removed from the map
+		 *		  |-- AudioSection2 -> Skip: will be removed from the multimap
 		 */
 		for (USoundWave* LoopingSound : LoopingSounds)
 		{
-			FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.Add(LoopingSound);
+			FLSATTrimTimesMap& TrimTimesMap = InOutTrimTimesMultiMap.FindOrAdd(LoopingSound);
 			USoundWave* DuplicatedSound = nullptr;
 
 			for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& ItRef : TrimTimesMap)
@@ -310,7 +310,7 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 				SectionsContainer.SetSound(DuplicatedSound);
 
 				// Move the non-looping trim times to the duplicated sound wave in the map
-				InOutTrimTimesMultiMap.Add(DuplicatedSound).Add(TrimTimes, SectionsContainer);
+				InOutTrimTimesMultiMap.FindOrAdd(DuplicatedSound).Add(TrimTimes, SectionsContainer);
 			}
 
 			// Remove looping sound wave from the map, all other usages were duplicated into separate sound wave asset
@@ -328,30 +328,68 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 }
 
 // Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
-void ULSATUtilsLibrary::HandleSoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+// Handles the policy for sounds used outside of level sequences, e.g., skipping or duplicating them.
+void ULSATUtilsLibrary::HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
-	for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& ItRef : InOutTrimTimesMultiMap)
+	TArray<USoundWave*> SoundsOutsideSequences;
+	for (const TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& It : InOutTrimTimesMultiMap)
 	{
-		// Find other usages of the sound wave outside the level sequences
-		TArray<UObject*> OutUsages;
-		FindAudioUsagesBySoundAsset(OutUsages, ItRef.Key);
-
-		const bool bHasExternalUsages = OutUsages.ContainsByPredicate([](const UObject* Usage) { return Usage && !Usage->IsA<ULevelSequence>(); });
-		if (!bHasExternalUsages)
+		if (!It.Key)
 		{
 			continue;
 		}
 
-		// display warning that sound is used by X assets, so we can't trim original sound asset, the Duplication Policy will be applied (
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Sound wave '%s' is used outside of level sequences by different assets (like in the world or blueprints)"
-			       ", so we can't trim original sound asset. Duplication Policy will be applied (duplicate original sound or skip processing)"), *ItRef.Key->GetName());
+		// Find other usages of the sound wave outside the level sequences.
+		TArray<UObject*> OutUsages;
+		FindAudioUsagesBySoundAsset(OutUsages, It.Key);
 
-		// We don't want to break other usages in levels and blueprints of this sound by reimporting with new timings
-		// Therefore, duplicate it and replace the original sound wave with the duplicated one in given map
-		USoundWave* DuplicatedSoundWave = DuplicateSoundWave(ItRef.Key);
-		checkf(DuplicatedSoundWave, TEXT("ERROR: [%i] %hs:\n'DuplicatedSoundWave' failed to Duplicate!"), __LINE__, __FUNCTION__);
-		ItRef.Key = DuplicatedSoundWave;
-		ItRef.Value.SetSound(DuplicatedSoundWave);
+		const bool bHasExternalUsages = OutUsages.ContainsByPredicate([](const UObject* Usage) { return Usage && !Usage->IsA<ULevelSequence>(); });
+		if (bHasExternalUsages)
+		{
+			SoundsOutsideSequences.Add(It.Key);
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("Sound wave '%s' is used outside of level sequences by different assets (like in the world or blueprints)"
+				       ", `Sounds Outside Sequences` Policy will be applied"), *It.Key->GetName());
+		}
+	}
+
+	if (SoundsOutsideSequences.IsEmpty())
+	{
+		return;
+	}
+
+	switch (ULSATSettings::Get().PolicySoundsOutsideSequences)
+	{
+	case ELSATPolicySoundsOutsideSequences::SkipAll:
+		// This sound wave will not be processed at all if it's used anywhere outside level sequences
+		InOutTrimTimesMultiMap.Remove(SoundsOutsideSequences);
+		break;
+
+	case ELSATPolicySoundsOutsideSequences::SkipAndDuplicate:
+		/* Duplicate the sound wave and replace the original sound wave with the duplicated one in the multimap.
+		 * SW_Wind
+		 *   |-- [15-30] -> Duplicate to SW_Wind1, move [15-30] Trim Times from SW_Wind to SW_Wind1
+		 *   |    |-- AudioSection0  -> Change to duplicated SW_Wind1
+		 *   |    |-- AudioSection1  -> Change to duplicated SW_Wind1
+		 *   |
+		 *   |-- ExternalUsage -> Found in Blueprint 'BP_Environment' -> Skip: SW_Wind remains untouched
+		 */
+		for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& ItRef : InOutTrimTimesMultiMap)
+		{
+			if (!SoundsOutsideSequences.Contains(ItRef.Key))
+			{
+				continue;
+			}
+
+			// We don't want to break other usages in levels and blueprints of this sound by reimporting with new timings
+			// Therefore, duplicate it and replace the original sound wave with the duplicated one in given map
+			USoundWave* DuplicatedSoundWave = DuplicateSoundWave(ItRef.Key);
+			ItRef.Key = DuplicatedSoundWave;
+			ItRef.Value.SetSound(DuplicatedSoundWave);
+		}
+		break;
+
+	default:
+		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicySoundsOutsideSequences value!"), __LINE__, __FUNCTION__);
 	}
 }
 
@@ -385,12 +423,7 @@ USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave,
 
 	// Duplicate the sound wave
 	USoundWave* DuplicatedSoundWave = Cast<USoundWave>(StaticDuplicateObject(OriginalSoundWave, DuplicatedPackage, *NewObjectName));
-
-	if (!DuplicatedSoundWave)
-	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to duplicate %s. Using original sound wave instead."), *OriginalSoundWave->GetName());
-		return OriginalSoundWave;
-	}
+	checkf(DuplicatedSoundWave, TEXT("ERROR: [%i] %hs:\nFailed to duplicate SoundWave: %s"), __LINE__, __FUNCTION__, *OriginalSoundWave->GetName());
 
 	// Complete the duplication process
 	DuplicatedSoundWave->MarkPackageDirty();
