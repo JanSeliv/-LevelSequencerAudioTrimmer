@@ -83,15 +83,53 @@ bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
  * FLSATTrimTimesMap
  ********************************************************************************************* */
 
+// Returns the first level sequence from the audio sections container
+class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
+{
+	const TArray<TObjectPtr<UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
+	const UMovieSceneAudioSection* Section = Sections && !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
+	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
+}
+
 bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
 {
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
 }
 
-// Returns the first level sequence from the audio sections container
-class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
+
+/*********************************************************************************************
+ * FLSATTrimTimesMultiMap
+ ********************************************************************************************* */
+
+void FLSATTrimTimesMultiMap::GetLoopingSounds(TArray<USoundWave*>& OutLoopingSounds) const
 {
-	const TArray<TObjectPtr<class UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
-	const UMovieSceneAudioSection* Section = Sections && !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
-	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
+	if (!OutLoopingSounds.IsEmpty())
+	{
+		OutLoopingSounds.Empty();
+	}
+
+	for (const TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& OuterIt : TrimTimesMultiMap)
+	{
+		USoundWave* SoundWave = OuterIt.Key;
+		const FLSATTrimTimesMap& TrimTimesMap = OuterIt.Value;
+
+		for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& InnerPair : TrimTimesMap)
+		{
+			if (InnerPair.Key.IsLooping())
+			{
+				OutLoopingSounds.AddUnique(SoundWave);
+
+				// Break inner map, go to the next sound wave (outer map)
+				break;
+			}
+		}
+	}
+}
+
+void FLSATTrimTimesMultiMap::Remove(const TArray<USoundWave*>& SoundWaves)
+{
+	for (USoundWave* SoundWave : SoundWaves)
+	{
+		TrimTimesMultiMap.Remove(SoundWave);
+	}
 }

@@ -91,6 +91,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TMap<FLSATTrimTimes, FLSATSectionsContainer> TrimTimesMap;
 
+	/** Returns the first level sequence from the audio sections container. */
+	class ULevelSequence* GetFirstLevelSequence() const;
+
 	auto begin() const { return TrimTimesMap.begin(); }
 	auto end() const { return TrimTimesMap.end(); }
 	auto begin() { return TrimTimesMap.begin(); }
@@ -98,9 +101,6 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 
 	FORCEINLINE int32 Num() const { return TrimTimesMap.Num(); }
 	bool Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection);
-
-	/** Returns the first level sequence from the audio sections container. */
-	class ULevelSequence* GetFirstLevelSequence() const;
 };
 
 /**
@@ -115,6 +115,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TMap<TObjectPtr<USoundWave>, FLSATTrimTimesMap> TrimTimesMultiMap;
 
+	/** Returns all looping sound waves from this map. */
+	void GetLoopingSounds(TArray<USoundWave*>& OutLoopingSounds) const;
+
 	auto begin() const { return TrimTimesMultiMap.begin(); }
 	auto end() const { return TrimTimesMultiMap.end(); }
 	auto begin() { return TrimTimesMultiMap.begin(); }
@@ -123,4 +126,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 	FORCEINLINE int32 Num() const { return TrimTimesMultiMap.Num(); }
 	FORCEINLINE bool IsEmpty() const { return TrimTimesMultiMap.IsEmpty(); }
 	FORCEINLINE FLSATTrimTimesMap& FindOrAdd(USoundWave* SoundWave) { return TrimTimesMultiMap.FindOrAdd(SoundWave); }
+
+	void Remove(const USoundWave* SoundWave) { TrimTimesMultiMap.Remove(SoundWave); }
+	void Remove(const TArray<USoundWave*>& SoundWaves);
 };

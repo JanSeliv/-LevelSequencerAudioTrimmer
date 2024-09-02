@@ -2,6 +2,8 @@
 
 #include "Engine/DeveloperSettings.h"
 //---
+#include "Data/LSATPolicyTypes.h"
+//---
 #include "LSATSettings.generated.h"
 
 /**
@@ -26,4 +28,9 @@ public:
 	/** Skip processing if the difference between total audio duration and section usage is less than this value. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming", meta = (ClampMin = "0", UIMin = "0"))
 	int32 MinDifferenceMs;
+
+	/** Policy for handling the audio tracks that are looping meaning a sound is repeating playing from the start.
+	* This policy might be expanded in the future containing more options like merging the looping sounds into one sound. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
+	ELSATPolicyLoopingSounds PolicyLoopingSounds;
 };

@@ -36,26 +36,23 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
 	 * 3. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
+	 * 4. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
 
 	for (const ULevelSequence* LevelSequence : LevelSequences)
 	{
-		// Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
 		HandleSoundsInRequestedLevelSequence(/*out*/TrimTimesMultiMap, LevelSequence);
-
 		if (TrimTimesMultiMap.IsEmpty())
 		{
 			UE_LOG(LogAudioTrimmer, Warning, TEXT("No valid trim times found in the level sequence."));
 			return;
 		}
 
-		// Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences
 		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
-
-		// Handle sound waves that are used outside of level sequences like in the world or blueprints
 		HandleSoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
+		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
 	}
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), TrimTimesMultiMap.Num());
@@ -84,7 +81,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 *			  |-- AudioSection4 -> Trim and reimport directly to SW_Step
 	 *
 	 * [Main Flow] - Is called after the preprocessing for each found audio:
-	 * 1. DuplicateSoundWave ➔ Duplicate sound waves when needed.
+	 * 1. DuplicateSoundWave ➔ Optional, duplicates sound wave asset if needed.
 	 * 2. ExportSoundWaveToWav ➔ Convert sound wave into a WAV file.
 	 * 3. TrimAudio ➔ Apply trimming to the WAV file.
 	 * 4. ReimportAudioToUnreal ➔ Load the trimmed WAV file back into the engine.
@@ -103,6 +100,12 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 			const FLSATTrimTimes& TrimTimes = InnerIt.Key;
 			const FLSATSectionsContainer& Sections = InnerIt.Value;
 			USoundWave* TrimmedSoundWave = OriginalSoundWave;
+
+			if (TrimTimes.IsUsageSimilarToTotalDuration())
+			{
+				UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *GetNameSafe(TrimTimes.SoundWave));
+				continue;
+			}
 
 			const bool bIsBeforeLastGroup = GroupIndex < InnerMap.Num() - 1;
 			if (bIsBeforeLastGroup)
@@ -286,6 +289,28 @@ void ULSATUtilsLibrary::HandleSoundsOutsideSequences(FLSATTrimTimesMultiMap& InO
 				SectionIt->SetSound(DuplicatedSoundWave);
 			}
 		}
+	}
+}
+
+// Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds
+void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+{
+	TArray<USoundWave*> LoopingSounds;
+	InOutTrimTimesMultiMap.GetLoopingSounds(LoopingSounds);
+
+	if (LoopingSounds.IsEmpty())
+	{
+		return;
+	}
+
+	switch (ULSATSettings::Get().PolicyLoopingSounds)
+	{
+	case ELSATPolicyLoopingSounds::SkipAll:
+		// Looping sounds should not be processed at all for this and all other audio tracks that use the same sound wave
+		InOutTrimTimesMultiMap.Remove(LoopingSounds);
+		break;
+	default:
+		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicyLoopingSounds value!"), __LINE__, __FUNCTION__);
 	}
 }
 
@@ -607,19 +632,10 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	{
 		const int32 StartFrameIndex = AudioSection->GetInclusiveStartFrame().Value;
 		const int32 EndFrameIndex = AudioSection->GetExclusiveEndFrame().Value;
-
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("Audio section is looping and starts from the beginning. Level Sequence: %s, Audio Asset: %s, Section Range: %d - %d"),
 		       *LevelSequence->GetName(), *SoundWave->GetName(),
 		       FMath::RoundToInt(StartFrameIndex / 1000.f),
 		       FMath::RoundToInt(EndFrameIndex / 1000.f));
-
-		return FLSATTrimTimes::Invalid;
-	}
-
-	if (TrimTimes.IsUsageSimilarToTotalDuration())
-	{
-		UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *SoundWave->GetName());
-		return FLSATTrimTimes::Invalid;
 	}
 
 	// Log the start and end times in milliseconds, section duration, and percentage used

@@ -54,6 +54,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
 	static void HandleSoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
 
+	/** Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
+	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it based on the policy for looping sounds. */
+	static void HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+
 	/*********************************************************************************************
 	 * Main Flow
 	 * Is called after the preprocessing for each found audio.
