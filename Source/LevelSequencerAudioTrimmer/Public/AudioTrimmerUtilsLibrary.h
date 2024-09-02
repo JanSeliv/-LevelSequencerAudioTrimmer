@@ -31,7 +31,7 @@ public:
 	 * - Reuses already trimmed audio assets if they are used multiple times with the same trim times.
 	 * - Duplicates sound waves if needed to handle multiple instances of the same audio with different trim times. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static void RunLevelSequenceAudioTrimmer(const ULevelSequence* LevelSequence);
+	static void RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence*>& LevelSequences);
 
 	/*********************************************************************************************
 	 * Preprocessing
@@ -39,10 +39,10 @@ public:
 	 ********************************************************************************************* */
 public:
 	/** Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
-	 * @param OutSoundsTrimTimesMap Combines and returns a map of sound waves to their corresponding trim times.
+	 * @param InOutSoundsTrimTimesMap Combines and returns a map of sound waves to their corresponding trim times.
 	 * @param LevelSequence The main level sequence to search for audio sections. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
-	static void HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& OutSoundsTrimTimesMap, const ULevelSequence* LevelSequence);
+	static void HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap, const ULevelSequence* LevelSequence);
 
 	/** Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences.
 	* @param InOutSoundsTrimTimesMap Takes the map of sound waves and adds the trim times with sections of the sound waves that are used in other sequences. */

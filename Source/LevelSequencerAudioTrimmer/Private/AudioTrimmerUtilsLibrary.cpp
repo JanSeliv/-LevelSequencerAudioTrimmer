@@ -28,37 +28,40 @@
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AudioTrimmerUtilsLibrary)
 
 // Entry method to run the main flow of trimming all audio assets for the given level sequence
-void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequence* LevelSequence)
+void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence*>& LevelSequences)
 {
 	/*********************************************************************************************
 	 * Preprocessing: Prepares the `SoundsTrimTimesMap` map that combines sound waves with their corresponding trim times.
 	 *********************************************************************************************
-	 * [Flow]
 	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
 	 * 3. HandleSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
 	 ********************************************************************************************* */
 
-	// Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
 	FSoundsTrimTimesMap SoundsTrimTimesMap;
-	HandleSoundsInRequestedLevelSequence(/*out*/SoundsTrimTimesMap, LevelSequence);
 
-	if (SoundsTrimTimesMap.IsEmpty())
+	for (const ULevelSequence* LevelSequence : LevelSequences)
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("No valid trim times found in the level sequence."));
-		return;
+		// Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
+		HandleSoundsInRequestedLevelSequence(/*out*/SoundsTrimTimesMap, LevelSequence);
+
+		if (SoundsTrimTimesMap.IsEmpty())
+		{
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("No valid trim times found in the level sequence."));
+			return;
+		}
+
+		// Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences
+		HandleSoundsInOtherSequences(/*InOut*/SoundsTrimTimesMap);
+
+		// Handle sound waves that are used outside of level sequences like in the world or blueprints
+		HandleSoundsOutsideSequences(/*InOut*/SoundsTrimTimesMap);
 	}
-
-	// Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences
-	HandleSoundsInOtherSequences(/*InOut*/SoundsTrimTimesMap);
-
-	// Handle sound waves that are used outside of level sequences like in the world or blueprints
-	HandleSoundsOutsideSequences(/*InOut*/SoundsTrimTimesMap);
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), SoundsTrimTimesMap.Num());
 
 	/*********************************************************************************************
-	 * Iteration
+	 * Main Flow: Is called after the preprocessing for each found audio.
 	 *********************************************************************************************
 	 * 
 	 * [Example Data] - Let's assume we have the following sounds and audio sections in the level sequence:
@@ -174,14 +177,12 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const ULevelSequenc
  ********************************************************************************************* */
 
 // Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
-void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& OutSoundsTrimTimesMap, const ULevelSequence* LevelSequence)
+void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap, const ULevelSequence* LevelSequence)
 {
 	if (!ensureMsgf(LevelSequence, TEXT("ASSERT: [%i] %hs:\n'LevelSequence' is not valid!"), __LINE__, __FUNCTION__))
 	{
 		return;
 	}
-
-	OutSoundsTrimTimesMap.Empty();
 
 	// Retrieve audio sections mapped by SoundWave from the main Level Sequence
 	TMap<USoundWave*, FAudioSectionsContainer> MainAudioSectionsMap;
@@ -201,7 +202,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrim
 		const FAudioSectionsContainer& MainSections = It.Value;
 
 		// Calculate and combine trim times for the main sequence
-		FTrimTimesMap& TrimTimesMap = OutSoundsTrimTimesMap.FindOrAdd(OriginalSoundWave);
+		FTrimTimesMap& TrimTimesMap = InOutSoundsTrimTimesMap.FindOrAdd(OriginalSoundWave);
 		CalculateTrimTimesInAllSections(TrimTimesMap, MainSections);
 	}
 }

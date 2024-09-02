@@ -58,12 +58,18 @@ void FLevelSequencerAudioTrimmerEdModule::OnLevelSequencerAudioTrimmerClicked()
 	TArray<FAssetData> SelectedAssets;
 	GEditor->GetContentBrowserSelections(SelectedAssets);
 
+	TArray<ULevelSequence*> LevelSequences;
 	for (const FAssetData& AssetData : SelectedAssets)
 	{
-		if (const ULevelSequence* LevelSequenceIt = Cast<ULevelSequence>(AssetData.GetAsset()))
+		if (ULevelSequence* LevelSequence = Cast<ULevelSequence>(AssetData.GetAsset()))
 		{
-			UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(LevelSequenceIt);
+			LevelSequences.Add(LevelSequence);
 		}
+	}
+
+	if (!LevelSequences.IsEmpty())
+	{
+		UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(LevelSequences);
 	}
 }
 

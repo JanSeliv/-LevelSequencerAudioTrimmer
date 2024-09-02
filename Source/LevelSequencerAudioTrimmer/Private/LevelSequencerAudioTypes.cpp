@@ -60,11 +60,3 @@ bool FTrimTimesMap::Add(const FTrimTimes& TrimTimes, UMovieSceneAudioSection* Au
 {
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
 }
-
-void FSoundsTrimTimesMap::Empty()
-{
-	if (!SoundsTrimTimesMap.IsEmpty())
-	{
-		SoundsTrimTimesMap.Empty();
-	}
-}

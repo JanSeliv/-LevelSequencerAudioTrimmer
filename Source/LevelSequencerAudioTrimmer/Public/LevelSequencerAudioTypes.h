@@ -111,5 +111,4 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FSoundsTrimTimesMap
 	FORCEINLINE int32 Num() const { return SoundsTrimTimesMap.Num(); }
 	FORCEINLINE bool IsEmpty() const { return SoundsTrimTimesMap.IsEmpty(); }
 	FORCEINLINE FTrimTimesMap& FindOrAdd(USoundWave* SoundWave) { return SoundsTrimTimesMap.FindOrAdd(SoundWave); }
-	void Empty();
 };
