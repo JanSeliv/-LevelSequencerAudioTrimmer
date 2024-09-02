@@ -590,28 +590,25 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	const float SectionDurationSeconds = SectionDurationFrames / TickResolution.AsDecimal();
 
 	// Calculate the effective end time within the audio asset
-	float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
+	const float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
 
 	USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
-	if (!SoundWave)
+	if (!ensureMsgf(SoundWave, TEXT("ASSERT: [%i] %hs:\n'SoundWave' is not valid!"), __LINE__, __FUNCTION__))
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("SoundWave is null or invalid."));
 		return FLSATTrimTimes::Invalid;
 	}
 
-	// Total duration of the audio in seconds
-	const float TotalAudioDurationSeconds = SoundWave->Duration;
+	FLSATTrimTimes TrimTimes;
+	TrimTimes.StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
+	TrimTimes.EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
+	TrimTimes.SoundWave = SoundWave;
 
-	// Check if the section is looping and handle it
-	const int32 DifferenceMs = static_cast<int32>((AudioEndSeconds - TotalAudioDurationSeconds) * 1000.0f);
-	const int32 MinDifferenceMs = ULSATSettings::Get().MinDifferenceMs;
-
-	if (AudioEndSeconds > TotalAudioDurationSeconds && DifferenceMs >= MinDifferenceMs)
+	if (TrimTimes.IsLooping())
 	{
 		const int32 StartFrameIndex = AudioSection->GetInclusiveStartFrame().Value;
 		const int32 EndFrameIndex = AudioSection->GetExclusiveEndFrame().Value;
 
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Audio section cannot be processed as it is looping and starts from the beginning. Level Sequence: %s, Audio Asset: %s, Section Range: %d - %d"),
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("Audio section is looping and starts from the beginning. Level Sequence: %s, Audio Asset: %s, Section Range: %d - %d"),
 		       *LevelSequence->GetName(), *SoundWave->GetName(),
 		       FMath::RoundToInt(StartFrameIndex / 1000.f),
 		       FMath::RoundToInt(EndFrameIndex / 1000.f));
@@ -619,23 +616,7 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 		return FLSATTrimTimes::Invalid;
 	}
 
-	// Clamp the end time if the difference is within the allowed threshold
-	AudioEndSeconds = FMath::Min(AudioEndSeconds, TotalAudioDurationSeconds);
-
-	// Calculate the start and end times in milliseconds
-	FLSATTrimTimes TrimTimes;
-	TrimTimes.StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
-	TrimTimes.EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
-	TrimTimes.SoundWave = SoundWave;
-
-	// Calculate the usage duration in milliseconds
-	const int32 UsageDurationMs = TrimTimes.EndTimeMs - TrimTimes.StartTimeMs;
-
-	// Calculate the total duration of the sound wave in milliseconds
-	const int32 TotalAudioDurationMs = static_cast<int32>(TotalAudioDurationSeconds * 1000.0f);
-
-	// Skip processing if the difference between total duration and usage duration is less than 200 milliseconds
-	if (TotalAudioDurationMs - UsageDurationMs < MinDifferenceMs)
+	if (TrimTimes.IsUsageSimilarToTotalDuration())
 	{
 		UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *SoundWave->GetName());
 		return FLSATTrimTimes::Invalid;
@@ -644,7 +625,7 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	// Log the start and end times in milliseconds, section duration, and percentage used
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Audio: %s, Used from %.2f seconds to %.2f seconds (Duration: %.2f seconds), Percentage Used: %.2f%%"),
 	       *SoundWave->GetName(), AudioStartOffsetSeconds, AudioEndSeconds, AudioEndSeconds - AudioStartOffsetSeconds,
-	       ((AudioEndSeconds - AudioStartOffsetSeconds) / TotalAudioDurationSeconds) * 100.0f);
+	       ((AudioEndSeconds - AudioStartOffsetSeconds) / SoundWave->Duration) * 100.0f);
 
 	return TrimTimes;
 }

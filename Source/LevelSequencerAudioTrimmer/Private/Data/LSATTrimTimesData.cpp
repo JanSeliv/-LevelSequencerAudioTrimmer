@@ -2,17 +2,44 @@
 
 #include "Data/LSATTrimTimesData.h"
 //---
-#include "LevelSequence.h"
 #include "LSATSettings.h"
+//---
+#include "LevelSequence.h"
 #include "Sections/MovieSceneAudioSection.h"
+#include "Sound/SoundWave.h"
 //---
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LSATTrimTimesData)
 
-/** Invalid trim times. */
-const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1, nullptr};
+/*********************************************************************************************
+ * FLSATTrimTimes
+ ********************************************************************************************* */
 
-FLSATTrimTimes::FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave)
-	: StartTimeMs(InStartTimeMs), EndTimeMs(InEndTimeMs), SoundWave(InSoundWave) {}
+/** Invalid trim times. */
+const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1};
+
+FLSATTrimTimes::FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs)
+	: StartTimeMs(InStartTimeMs), EndTimeMs(InEndTimeMs) {}
+
+// Returns true if the audio section is looping (repeating playing from the start)
+bool FLSATTrimTimes::IsLooping() const
+{
+	const int32 DifferenceMs = EndTimeMs - GetTotalDurationMs();
+	return EndTimeMs > GetTotalDurationMs()
+		&& DifferenceMs >= ULSATSettings::Get().MinDifferenceMs;
+}
+
+// Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration
+int32 FLSATTrimTimes::GetTotalDurationMs() const
+{
+	return SoundWave ? static_cast<int32>(SoundWave->Duration * 1000.0f) : 0;
+}
+
+// Returns true if usage duration and total duration are similar
+bool FLSATTrimTimes::IsUsageSimilarToTotalDuration() const
+{
+	const int32 TotalDurationMs = GetTotalDurationMs();
+	return TotalDurationMs - GetUsageDurationMs() < ULSATSettings::Get().MinDifferenceMs;
+}
 
 // Returns true if the start and end times are valid.
 bool FLSATTrimTimes::IsValid() const
@@ -35,11 +62,6 @@ bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 	return IsSimilar(Other, ToleranceMs);
 }
 
-bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
-{
-	return AudioSections.AddUnique(AudioSection) >= 0;
-}
-
 // Hash function to TMap
 uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 {
@@ -48,15 +70,28 @@ uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 		GetTypeHash(TrimTimes.EndTimeMs);
 }
 
+/*********************************************************************************************
+ * FLSATSectionsContainer
+ ********************************************************************************************* */
+
+bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
+{
+	return AudioSections.AddUnique(AudioSection) >= 0;
+}
+
+/*********************************************************************************************
+ * FLSATTrimTimesMap
+ ********************************************************************************************* */
+
+bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
+{
+	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
+}
+
 // Returns the first level sequence from the audio sections container
 class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
 {
 	const TArray<TObjectPtr<class UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
 	const UMovieSceneAudioSection* Section = !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
 	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
-}
-
-bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
-{
-	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
 }

@@ -17,7 +17,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	GENERATED_BODY()
 
 	FLSATTrimTimes() = default;
-	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave);
+	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs);
 
 	/** Invalid trim times. */
 	static const FLSATTrimTimes Invalid;
@@ -33,6 +33,18 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** The sound wave associated with these trim times. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TObjectPtr<USoundWave> SoundWave = nullptr;
+
+	/** Returns true if the audio section is looping (repeating playing from the start). */
+	bool IsLooping() const;
+
+	/** Returns the duration of actual usage in milliseconds. */
+	FORCEINLINE int32 GetUsageDurationMs() const { return EndTimeMs - StartTimeMs; }
+
+	/** Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration. */
+	int32 GetTotalDurationMs() const;
+
+	/** Returns true if usage duration and total duration are similar. */
+	bool IsUsageSimilarToTotalDuration() const;
 
 	/** Returns true if the start and end times are valid. */
 	bool IsValid() const;
