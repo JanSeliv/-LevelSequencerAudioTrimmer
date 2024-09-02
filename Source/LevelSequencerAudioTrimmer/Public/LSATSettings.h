@@ -2,20 +2,20 @@
 
 #include "Engine/DeveloperSettings.h"
 //---
-#include "LevelSequencerAudioSettings.generated.h"
+#include "LSATSettings.generated.h"
 
 /**
  * Developer Settings for the Level Sequencer Audio Trimmer plugin.
  * Is set up in 'Project Settings' -> "Plugins" -> "Level Sequencer Audio Trimmer".
  */
 UCLASS(Config = LevelSequencerAudioTrimmer, DefaultConfig, DisplayName = "Level Sequencer Audio Trimmer")
-class LEVELSEQUENCERAUDIOTRIMMERED_API ULevelSequencerAudioSettings : public UDeveloperSettings
+class LEVELSEQUENCERAUDIOTRIMMERED_API ULSATSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
 	/** Returns Project Settings Data of the Level Sequencer Audio Trimmer plugin. */
-	static const FORCEINLINE ULevelSequencerAudioSettings& Get() { return *GetDefault<ThisClass>(); }
+	static const FORCEINLINE ULSATSettings& Get() { return *GetDefault<ThisClass>(); }
 
 	/** Gets the settings container name for the settings, either Project or Editor */
 	virtual FName GetContainerName() const override { return TEXT("Project"); }

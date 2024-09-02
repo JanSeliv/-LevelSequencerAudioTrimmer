@@ -4,7 +4,7 @@
 
 #include "Kismet/BlueprintFunctionLibrary.h"
 //---
-#include "AudioTrimmerUtilsLibrary.generated.h"
+#include "LSATUtilsLibrary.generated.h"
 
 class UMovieSceneAudioSection;
 class ULevelSequence;
@@ -21,7 +21,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogAudioTrimmer, Log, All);
  * Utility library for handling audio trimming and reimporting in Unreal Engine.
  */
 UCLASS()
-class LEVELSEQUENCERAUDIOTRIMMERED_API UAudioTrimmerUtilsLibrary : public UBlueprintFunctionLibrary
+class LEVELSEQUENCERAUDIOTRIMMERED_API ULSATUtilsLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

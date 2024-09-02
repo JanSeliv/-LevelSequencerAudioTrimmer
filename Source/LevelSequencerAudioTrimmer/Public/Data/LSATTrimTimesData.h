@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 //---
-#include "LevelSequencerAudioTypes.generated.h"
+#include "LSATTrimTimesData.generated.h"
 
 class USoundWave;
 

@@ -1,12 +1,12 @@
 ﻿// Copyright (c) Yevhenii Selivanov
 
-#include "Data/LevelSequencerAudioTypes.h"
+#include "Data/LSATTrimTimesData.h"
 //---
 #include "LevelSequence.h"
-#include "LevelSequencerAudioSettings.h"
+#include "LSATSettings.h"
 #include "Sections/MovieSceneAudioSection.h"
 //---
-#include UE_INLINE_GENERATED_CPP_BY_NAME(LevelSequencerAudioTypes)
+#include UE_INLINE_GENERATED_CPP_BY_NAME(LSATTrimTimesData)
 
 /** Invalid trim times. */
 const FTrimTimes FTrimTimes::Invalid = FTrimTimes{-1, -1, nullptr};
@@ -31,7 +31,7 @@ bool FTrimTimes::IsSimilar(const FTrimTimes& Other, int32 ToleranceMs) const
 // Equal operator for comparing in TMap.
 bool FTrimTimes::operator==(const FTrimTimes& Other) const
 {
-	const int32 ToleranceMs = ULevelSequencerAudioSettings::Get().MinDifferenceMs;
+	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
 	return IsSimilar(Other, ToleranceMs);
 }
 

@@ -2,7 +2,7 @@
 
 #include "LevelSequencerAudioTrimmerEdModule.h"
 //---
-#include "AudioTrimmerUtilsLibrary.h"
+#include "LSATUtilsLibrary.h"
 //---
 #include "Editor.h"
 #include "LevelSequence.h"
@@ -69,7 +69,7 @@ void FLevelSequencerAudioTrimmerEdModule::OnLevelSequencerAudioTrimmerClicked()
 
 	if (!LevelSequences.IsEmpty())
 	{
-		UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(LevelSequences);
+		ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(LevelSequences);
 	}
 }
 

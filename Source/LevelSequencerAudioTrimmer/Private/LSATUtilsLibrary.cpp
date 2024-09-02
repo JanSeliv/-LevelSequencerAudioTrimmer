@@ -1,13 +1,13 @@
 ﻿// Copyright (c) Yevhenii Selivanov
 
-#include "AudioTrimmerUtilsLibrary.h"
+#include "LSATUtilsLibrary.h"
 //---
-#include "Data/LevelSequencerAudioTypes.h"
+#include "Data/LSATTrimTimesData.h"
 //---
 #include "AssetExportTask.h"
 #include "AssetToolsModule.h"
 #include "LevelSequence.h"
-#include "LevelSequencerAudioSettings.h"
+#include "LSATSettings.h"
 #include "LevelSequencerAudioTrimmerEdModule.h"
 #include "MovieScene.h"
 #include "MovieSceneTrack.h"
@@ -25,10 +25,10 @@
 #include "Tracks/MovieSceneAudioTrack.h"
 #include "UObject/SavePackage.h"
 //---
-#include UE_INLINE_GENERATED_CPP_BY_NAME(AudioTrimmerUtilsLibrary)
+#include UE_INLINE_GENERATED_CPP_BY_NAME(LSATUtilsLibrary)
 
 // Entry method to run the main flow of trimming all audio assets for the given level sequence
-void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence*>& LevelSequences)
+void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence*>& LevelSequences)
 {
 	/*********************************************************************************************
 	 * Preprocessing: Prepares the `SoundsTrimTimesMap` map that combines sound waves with their corresponding trim times.
@@ -177,7 +177,7 @@ void UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevel
  ********************************************************************************************* */
 
 // Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
-void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap, const ULevelSequence* LevelSequence)
+void ULSATUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap, const ULevelSequence* LevelSequence)
 {
 	if (!ensureMsgf(LevelSequence, TEXT("ASSERT: [%i] %hs:\n'LevelSequence' is not valid!"), __LINE__, __FUNCTION__))
 	{
@@ -208,7 +208,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInRequestedLevelSequence(FSoundsTrim
 }
 
 // Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences
-void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap)
+void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap)
 {
 	for (TTuple<TObjectPtr<USoundWave>, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
 	{
@@ -254,7 +254,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsInOtherSequences(FSoundsTrimTimesMap
 }
 
 // Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
-void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap)
+void ULSATUtilsLibrary::HandleSoundsOutsideSequences(FSoundsTrimTimesMap& InOutSoundsTrimTimesMap)
 {
 	for (TTuple<TObjectPtr<USoundWave>, FTrimTimesMap>& ItRef : InOutSoundsTrimTimesMap)
 	{
@@ -294,7 +294,7 @@ void UAudioTrimmerUtilsLibrary::HandleSoundsOutsideSequences(FSoundsTrimTimesMap
  ********************************************************************************************* */
 
 // Duplicates the given SoundWave asset, incrementing an index to its name
-USoundWave* UAudioTrimmerUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex/* = 1*/)
+USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex/* = 1*/)
 {
 	checkf(OriginalSoundWave, TEXT("ERROR: [%i] %hs:\n'OriginalSoundWave' is null!"), __LINE__, __FUNCTION__);
 
@@ -336,7 +336,7 @@ USoundWave* UAudioTrimmerUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSo
 }
 
 // Exports a sound wave to a WAV file
-FString UAudioTrimmerUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
+FString ULSATUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
 {
 	if (!SoundWave)
 	{
@@ -374,7 +374,7 @@ FString UAudioTrimmerUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
 }
 
 // Trims an audio file to the specified start and end times
-bool UAudioTrimmerUtilsLibrary::TrimAudio(const FTrimTimes& TrimTimes, const FString& InputPath, const FString& OutputPath)
+bool ULSATUtilsLibrary::TrimAudio(const FTrimTimes& TrimTimes, const FString& InputPath, const FString& OutputPath)
 {
 	if (!TrimTimes.IsValid())
 	{
@@ -409,7 +409,7 @@ bool UAudioTrimmerUtilsLibrary::TrimAudio(const FTrimTimes& TrimTimes, const FSt
 }
 
 // Reimports an audio file into the original sound wave asset in Unreal Engine
-bool UAudioTrimmerUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundWave, const FString& TrimmedAudioFilePath)
+bool ULSATUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundWave, const FString& TrimmedAudioFilePath)
 {
 	if (!OriginalSoundWave)
 	{
@@ -441,7 +441,7 @@ bool UAudioTrimmerUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundW
 }
 
 // Resets the start frame offset of an audio section to 0 and sets a new sound wave
-void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* NewSound)
+void ULSATUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* NewSound)
 {
 	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__)
 		|| !ensureMsgf(NewSound, TEXT("ASSERT: [%i] %hs:\n'NewSound' is not valid!"), __LINE__, __FUNCTION__))
@@ -466,7 +466,7 @@ void UAudioTrimmerUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection
 }
 
 // Deletes a temporary WAV file from the file system
-bool UAudioTrimmerUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
+bool ULSATUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
 {
 	if (FPaths::FileExists(FilePath))
 	{
@@ -487,7 +487,7 @@ bool UAudioTrimmerUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
  ********************************************************************************************* */
 
 // Retrieves all audio sections from the given level sequence
-void UAudioTrimmerUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, FAudioSectionsContainer>& OutMap, const ULevelSequence* InLevelSequence)
+void ULSATUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, FAudioSectionsContainer>& OutMap, const ULevelSequence* InLevelSequence)
 {
 	if (!InLevelSequence)
 	{
@@ -521,7 +521,7 @@ void UAudioTrimmerUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave
 }
 
 // Finds all assets that directly reference the given sound wave
-void UAudioTrimmerUtilsLibrary::FindAudioUsagesBySoundAsset(TArray<UObject*>& OutUsages, const USoundWave* InSound)
+void ULSATUtilsLibrary::FindAudioUsagesBySoundAsset(TArray<UObject*>& OutUsages, const USoundWave* InSound)
 {
 	if (!ensureMsgf(InSound, TEXT("ASSERT: [%i] %hs:\n'InSound' is not valid!"), __LINE__, __FUNCTION__))
 	{
@@ -552,7 +552,7 @@ void UAudioTrimmerUtilsLibrary::FindAudioUsagesBySoundAsset(TArray<UObject*>& Ou
 }
 
 // Calculates the start and end times in milliseconds for trimming multiple audio sections
-void UAudioTrimmerUtilsLibrary::CalculateTrimTimesInAllSections(FTrimTimesMap& OutTrimTimesMap, const FAudioSectionsContainer& AudioSections)
+void ULSATUtilsLibrary::CalculateTrimTimesInAllSections(FTrimTimesMap& OutTrimTimesMap, const FAudioSectionsContainer& AudioSections)
 {
 	for (UMovieSceneAudioSection* AudioSection : AudioSections)
 	{
@@ -570,7 +570,7 @@ void UAudioTrimmerUtilsLibrary::CalculateTrimTimesInAllSections(FTrimTimesMap& O
 }
 
 //Calculates the start and end times in milliseconds for trimming an audio section
-FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection)
+FTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection)
 {
 	const ULevelSequence* LevelSequence = AudioSection ? AudioSection->GetTypedOuter<ULevelSequence>() : nullptr;
 	if (!LevelSequence)
@@ -604,7 +604,7 @@ FTrimTimes UAudioTrimmerUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAud
 
 	// Check if the section is looping and handle it
 	const int32 DifferenceMs = static_cast<int32>((AudioEndSeconds - TotalAudioDurationSeconds) * 1000.0f);
-	const int32 MinDifferenceMs = ULevelSequencerAudioSettings::Get().MinDifferenceMs;
+	const int32 MinDifferenceMs = ULSATSettings::Get().MinDifferenceMs;
 
 	if (AudioEndSeconds > TotalAudioDurationSeconds && DifferenceMs >= MinDifferenceMs)
 	{
