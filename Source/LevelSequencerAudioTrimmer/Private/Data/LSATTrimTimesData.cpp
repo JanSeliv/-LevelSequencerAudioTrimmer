@@ -92,6 +92,6 @@ bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSec
 class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
 {
 	const TArray<TObjectPtr<class UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
-	const UMovieSceneAudioSection* Section = !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
+	const UMovieSceneAudioSection* Section = Sections && !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
 	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
 }
