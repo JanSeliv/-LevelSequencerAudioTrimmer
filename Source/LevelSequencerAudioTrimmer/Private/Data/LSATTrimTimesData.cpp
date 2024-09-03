@@ -127,25 +127,29 @@ FLSATSectionsContainer& FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, 
  * FLSATTrimTimesMultiMap
  ********************************************************************************************* */
 
-void FLSATTrimTimesMultiMap::GetLoopingSounds(TArray<USoundWave*>& OutLoopingSounds) const
+// Returns all sounds waves from this multimap that satisfies the given predicate
+void FLSATTrimTimesMultiMap::GetSounds(TArray<USoundWave*>& OutSoundWaves, TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)> Predicate) const
 {
-	if (!OutLoopingSounds.IsEmpty())
+	if (!OutSoundWaves.IsEmpty())
 	{
-		OutLoopingSounds.Empty();
+		OutSoundWaves.Empty();
 	}
 
 	for (const TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& OuterIt : TrimTimesMultiMap)
 	{
 		USoundWave* SoundWave = OuterIt.Key;
 		const FLSATTrimTimesMap& TrimTimesMap = OuterIt.Value;
+		if (!SoundWave)
+		{
+			continue;
+		}
 
 		for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& InnerPair : TrimTimesMap)
 		{
-			if (InnerPair.Key.IsLooping())
+			if (Predicate(InnerPair))
 			{
-				OutLoopingSounds.AddUnique(SoundWave);
-
 				// Break inner map, go to the next sound wave (outer map)
+				OutSoundWaves.AddUnique(SoundWave);
 				break;
 			}
 		}

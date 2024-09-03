@@ -270,7 +270,7 @@ void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InO
 void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
 	TArray<USoundWave*> LoopingSounds;
-	InOutTrimTimesMultiMap.GetLoopingSounds(LoopingSounds);
+	InOutTrimTimesMultiMap.GetSounds(LoopingSounds, [](const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& It) { return It.Key.IsLooping(); });
 
 	if (LoopingSounds.IsEmpty())
 	{
@@ -342,25 +342,20 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 void ULSATUtilsLibrary::HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
 	TArray<USoundWave*> SoundsOutsideSequences;
-	for (const TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& It : InOutTrimTimesMultiMap)
+	InOutTrimTimesMultiMap.GetSounds(SoundsOutsideSequences, [](const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& It)
 	{
-		if (!It.Key)
-		{
-			continue;
-		}
-
 		// Find other usages of the sound wave outside the level sequences.
 		TArray<UObject*> OutUsages;
-		FindAudioUsagesBySoundAsset(OutUsages, It.Key);
+		FindAudioUsagesBySoundAsset(OutUsages, It.Key.SoundWave);
 
 		const bool bHasExternalUsages = OutUsages.ContainsByPredicate([](const UObject* Usage) { return Usage && !Usage->IsA<ULevelSequence>(); });
 		if (bHasExternalUsages)
 		{
-			SoundsOutsideSequences.Add(It.Key);
 			UE_LOG(LogAudioTrimmer, Warning, TEXT("Sound wave '%s' is used outside of level sequences by different assets (like in the world or blueprints)"
-				       ", `Sounds Outside Sequences` Policy will be applied"), *It.Key->GetName());
+				       ", `Sounds Outside Sequences` Policy will be applied"), *GetNameSafe(It.Key.SoundWave));
 		}
-	}
+		return bHasExternalUsages;
+	});
 
 	if (SoundsOutsideSequences.IsEmpty())
 	{

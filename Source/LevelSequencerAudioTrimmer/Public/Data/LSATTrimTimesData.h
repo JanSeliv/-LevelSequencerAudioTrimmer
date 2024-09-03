@@ -123,8 +123,8 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TMap<TObjectPtr<USoundWave>, FLSATTrimTimesMap> TrimTimesMultiMap;
 
-	/** Returns all looping sound waves from this map. */
-	void GetLoopingSounds(TArray<USoundWave*>& OutLoopingSounds) const;
+	/** Returns all sounds waves from this multimap that satisfies the given predicate. */
+	void GetSounds(TArray<USoundWave*>& OutSoundWaves, TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)> Predicate) const;
 
 	auto begin() const { return TrimTimesMultiMap.begin(); }
 	auto end() const { return TrimTimesMultiMap.end(); }
