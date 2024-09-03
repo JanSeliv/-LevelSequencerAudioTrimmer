@@ -89,10 +89,19 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 * 6. DeleteTempWavFile ➔ Remove the temporary WAV file.
 	 ******************************************************************************************* */
 
+	const ELSATPolicyDifferentTrimTimes PolicyDifferentTrimTimes = ULSATSettings::Get().PolicyDifferentTrimTimes;
 	for (const TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& OuterIt : TrimTimesMultiMap)
 	{
 		USoundWave* const OriginalSoundWave = OuterIt.Key;
 		const FLSATTrimTimesMap& InnerMap = OuterIt.Value;
+
+		// Handle the SkipAll policy: Skip processing for all tracks if there are different trim times
+		if (InnerMap.Num() > 1
+			&& PolicyDifferentTrimTimes == ELSATPolicyDifferentTrimTimes::SkipAll)
+		{
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("Skipping processing for sound wave %s due to different trim times."), *GetNameSafe(OriginalSoundWave));
+			continue;
+		}
 
 		int32 GroupIndex = 0;
 		for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& InnerIt : InnerMap)
@@ -108,7 +117,8 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 			}
 
 			const bool bIsBeforeLastGroup = GroupIndex < InnerMap.Num() - 1;
-			if (bIsBeforeLastGroup)
+			if (bIsBeforeLastGroup
+				&& PolicyDifferentTrimTimes == ELSATPolicyDifferentTrimTimes::ReimportOneAndDuplicateOthers)
 			{
 				/* Duplicate sound wave for different timings, so trimmed sound will be reimported in the duplicated sound wave
 				 *	SW_Step

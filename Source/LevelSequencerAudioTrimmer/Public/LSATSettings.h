@@ -29,13 +29,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming", meta = (ClampMin = "0", UIMin = "0"))
 	int32 MinDifferenceMs;
 
-	/** Policy for handling the audio tracks that are looping meaning a sound is repeating playing from the start.
-	* This policy might be expanded in the future containing more options like merging the looping sounds into one sound. */
+	/** Policy for handling the audio tracks that are looping meaning a sound is repeating playing from the start. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
 	ELSATPolicyLoopingSounds PolicyLoopingSounds;
 
-	/** Policy for handling sound waves that are used outside of level sequences, such as in the world or blueprints.
-	 * This policy might be expanded in the future with more options like use trimmed sound waves for external usage.*/
+	/** Policy for handling sound waves that are used outside of level sequences, such as in the world or blueprints.*/
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
 	ELSATPolicySoundsOutsideSequences PolicySoundsOutsideSequences;
+
+	/** Policy for handling the audio tracks with different trim times for the same sound wave. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
+	ELSATPolicyDifferentTrimTimes PolicyDifferentTrimTimes;
 };

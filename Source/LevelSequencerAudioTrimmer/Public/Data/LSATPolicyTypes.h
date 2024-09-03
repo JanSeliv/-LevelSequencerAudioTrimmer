@@ -11,8 +11,8 @@
 UENUM(BlueprintType)
 enum class ELSATPolicyLoopingSounds : uint8
 {
-	 ///< This sound wave will not be processed at all for this and all other audio tracks that use the same sound wave. 
-	 SkipAll,
+	///< This sound wave will not be processed at all for this and all other audio tracks that use the same sound wave. 
+	SkipAll,
 	///< Section with looping sound will not be processed, but all other usages of the same sound wave will be duplicated into separate sound wave asset.
 	SkipAndDuplicate,
 };
@@ -29,4 +29,16 @@ enum class ELSATPolicySoundsOutsideSequences : uint8
 
 	///< Sound wave used outside level sequences will not be touched, but those that used in level sequences will be duplicated.
 	SkipAndDuplicate,
+};
+
+/**
+ * Policy for handling the audio tracks with different trim times for the same sound wave.
+ */
+UENUM(BlueprintType)
+enum class ELSATPolicyDifferentTrimTimes : uint8
+{
+	///< Skip processing for all tracks of this sound if it has different trim times.
+	SkipAll,
+	///< Duplicate sound wave asset for different trim times, but reimport only one of them.
+	ReimportOneAndDuplicateOthers,
 };
