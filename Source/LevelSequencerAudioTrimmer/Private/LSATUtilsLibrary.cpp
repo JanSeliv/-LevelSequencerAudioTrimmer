@@ -318,6 +318,7 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 
 				// Assign the duplicated sound wave to all audio sections in this trim time
 				SectionsContainer.SetSound(DuplicatedSound);
+				TrimTimes.SoundWave = DuplicatedSound;
 
 				// Move the non-looping trim times to the duplicated sound wave in the map
 				InOutTrimTimesMultiMap.FindOrAdd(DuplicatedSound).Add(TrimTimes, SectionsContainer);
