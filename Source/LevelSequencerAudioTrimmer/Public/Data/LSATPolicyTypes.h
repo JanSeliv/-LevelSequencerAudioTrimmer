@@ -15,6 +15,8 @@ enum class ELSATPolicyLoopingSounds : uint8
 	SkipAll,
 	///< Section with looping sound will not be processed, but all other usages of the same sound wave will be duplicated into separate sound wave asset.
 	SkipAndDuplicate,
+	///< Splits looping section into multiple segments at the points where the sound starts from beginning.
+	SplitSections,
 };
 
 /**

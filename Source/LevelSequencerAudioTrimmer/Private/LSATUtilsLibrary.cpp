@@ -5,18 +5,15 @@
 #include "Data/LSATTrimTimesData.h"
 //---
 #include "AssetExportTask.h"
-#include "AssetToolsModule.h"
 #include "LevelSequence.h"
-#include "LSATSettings.h"
 #include "LevelSequencerAudioTrimmerEdModule.h"
+#include "LSATSettings.h"
 #include "MovieScene.h"
 #include "MovieSceneTrack.h"
-#include "ObjectTools.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Exporters/Exporter.h"
 #include "Factories/ReimportSoundFactory.h"
 #include "HAL/FileManager.h"
-#include "Misc/FileHelper.h"
 #include "Sections/MovieSceneAudioSection.h"
 #include "Sections/MovieSceneSubSection.h"
 #include "Sound/SampleBufferIO.h"
@@ -266,7 +263,7 @@ void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InO
 	}
 }
 
-// Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds
+// Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds or splitting them
 void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
 	TArray<USoundWave*> LoopingSounds;
@@ -330,6 +327,62 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 			{
 				InOutTrimTimesMultiMap.Remove(LoopingSound);
 			}
+		}
+		break;
+
+	case ELSATPolicyLoopingSounds::SplitSections:
+		/* Splits looping sections into multiple segments based on the total duration of the sound asset.
+		 *
+		 * |===============|========|========|
+		 *     ^               ^        ^
+		 * Base Segment     Loop 1   Loop 2
+		 *
+		 * [BEFORE]
+		 * |-- [0-75] -> This is looping and exceeds the total sound duration of 30ms
+		 * |    |-- AudioSection0
+		 * 
+		 * [AFTER]
+		 *   |-- [0-30] -> First segment
+		 *   |    |-- AudioSection0 (split part 1)
+		 *   |
+		 *   |-- [30-60] -> Second segment
+		 *   |    |-- AudioSection0 (split part 2)
+		 *   |
+		 *   |-- [60-75] -> Third segment
+		 *   |    |-- AudioSection0 (split part 3)
+		 */
+		for (USoundWave* LoopingSound : LoopingSounds)
+		{
+			FLSATTrimTimesMap& TrimTimesMapRef = InOutTrimTimesMultiMap.FindOrAdd(LoopingSound);
+
+			TArray<FLSATTrimTimes> TrimTimesToRemove;
+			FLSATSectionsContainer AllNewSections;
+
+			for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& It : TrimTimesMapRef)
+			{
+				const FLSATTrimTimes& TrimTimes = It.Key;
+
+				if (!TrimTimes.IsValid()
+					|| !TrimTimes.IsLooping())
+				{
+					continue;
+				}
+
+				FLSATSectionsContainer SplitSections;
+				SplitLoopingSections(/*out*/SplitSections, TrimTimes);
+
+				AllNewSections.Append(SplitSections);
+				TrimTimesToRemove.Emplace(TrimTimes);
+			}
+
+			// Remove original looping TrimTimes from the map
+			for (const FLSATTrimTimes& TrimTimesToRemoveEntry : TrimTimesToRemove)
+			{
+				TrimTimesMapRef.Remove(TrimTimesToRemoveEntry);
+			}
+
+			// Recalculate trim times for the new sections and merge them back into the map
+			CalculateTrimTimesInAllSections(TrimTimesMapRef, AllNewSections);
 		}
 		break;
 
@@ -546,15 +599,18 @@ bool ULSATUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundWave, con
 }
 
 // Resets the start frame offset of an audio section to 0 and sets a new sound wave
-void ULSATUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* NewSound)
+void ULSATUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* OptionalNewSound/* = nullptr*/)
 {
-	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__)
-		|| !ensureMsgf(NewSound, TEXT("ASSERT: [%i] %hs:\n'NewSound' is not valid!"), __LINE__, __FUNCTION__))
+	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__))
 	{
 		return;
 	}
 
-	AudioSection->SetSound(NewSound);
+	if (OptionalNewSound)
+	{
+		AudioSection->SetSound(OptionalNewSound);
+	}
+
 	AudioSection->SetStartOffset(0);
 	AudioSection->SetLooping(false);
 
@@ -567,7 +623,7 @@ void ULSATUtilsLibrary::ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioS
 	}
 
 	// Log the operation
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Reset Start Frame Offset and adjusted duration for section using sound: %s"), *GetNameSafe(NewSound));
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Reset Start Frame Offset and adjusted duration for section using sound: %s"), *GetNameSafe(AudioSection->GetSound()));
 }
 
 // Deletes a temporary WAV file from the file system
@@ -677,7 +733,7 @@ void ULSATUtilsLibrary::CalculateTrimTimesInAllSections(FLSATTrimTimesMap& OutTr
 //Calculates the start and end times in milliseconds for trimming an audio section
 FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection)
 {
-	const ULevelSequence* LevelSequence = AudioSection ? AudioSection->GetTypedOuter<ULevelSequence>() : nullptr;
+	ULevelSequence* LevelSequence = AudioSection ? AudioSection->GetTypedOuter<ULevelSequence>() : nullptr;
 	if (!LevelSequence)
 	{
 		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid LevelSequence or AudioSection."));
@@ -707,6 +763,8 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	TrimTimes.StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
 	TrimTimes.EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
 	TrimTimes.SoundWave = SoundWave;
+	TrimTimes.AudioSection = AudioSection;
+	TrimTimes.LevelSequence = LevelSequence;
 
 	if (TrimTimes.IsLooping())
 	{
@@ -724,4 +782,45 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	       ((AudioEndSeconds - AudioStartOffsetSeconds) / SoundWave->Duration) * 100.0f);
 
 	return TrimTimes;
+}
+
+// Splits the looping segments in the given trim times into multiple sections
+void ULSATUtilsLibrary::SplitLoopingSections(FLSATSectionsContainer& OutNewSectionsContainer, const FLSATTrimTimes& TrimTimes)
+{
+	const FFrameRate TickResolution = TrimTimes.LevelSequence->GetMovieScene()->GetTickResolution();
+	const int32 TotalSoundDurationMs = TrimTimes.GetTotalDurationMs();
+
+	// Ensure splitting starts after the first loop point
+	int32 CurrentStartTimeMs = FMath::Max(TrimTimes.StartTimeMs + TotalSoundDurationMs, TrimTimes.StartTimeMs);
+
+	UMovieSceneAudioSection* Section = TrimTimes.AudioSection;
+	OutNewSectionsContainer.Add(Section);
+
+	// Continue splitting until the end time is reached
+	while (CurrentStartTimeMs < TrimTimes.EndTimeMs)
+	{
+		const int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + TotalSoundDurationMs, TrimTimes.EndTimeMs);
+		const FFrameNumber SplitFrame = TickResolution.AsFrameNumber(CurrentStartTimeMs / 1000.f);
+		const FQualifiedFrameTime SplitTime(SplitFrame, TickResolution);
+
+		if (!Section->GetRange().Contains(SplitTime.Time.GetFrame()))
+		{
+			UE_LOG(LogAudioTrimmer, Error, TEXT("Section '%s' does not contain the split time: %d. Exiting."), *Section->GetName(), SplitTime.Time.GetFrame().Value);
+			return;
+		}
+
+		constexpr bool bDeleteKeysWhenTrimming = false;
+		UMovieSceneAudioSection* NewSection = Cast<UMovieSceneAudioSection>(Section->SplitSection(SplitTime, bDeleteKeysWhenTrimming));
+		if (!NewSection)
+		{
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to split section: %s"), *Section->GetName());
+			return;
+		}
+
+		ResetTrimmedAudioSection(NewSection);
+		OutNewSectionsContainer.Add(NewSection);
+		Section = NewSection;
+
+		CurrentStartTimeMs = NextEndTimeMs;
+	}
 }

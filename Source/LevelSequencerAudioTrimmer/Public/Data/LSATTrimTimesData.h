@@ -34,6 +34,14 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TObjectPtr<USoundWave> SoundWave = nullptr;
 
+	/** The track on level sequence associated with these trim times. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
+	TObjectPtr<class UMovieSceneAudioSection> AudioSection = nullptr;
+
+	/** The level sequence associated with these trim times. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
+	TObjectPtr<class ULevelSequence> LevelSequence = nullptr;
+
 	/** Returns true if the audio section is looping (repeating playing from the start). */
 	bool IsLooping() const;
 
@@ -80,6 +88,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
 	auto end() { return AudioSections.end(); }
 
 	bool Add(UMovieSceneAudioSection* AudioSection);
+	int32 Num() const { return AudioSections.Num(); }
+	bool IsEmpty() const { return AudioSections.IsEmpty(); }
+	void Append(const FLSATSectionsContainer& Other) { AudioSections.Append(Other.AudioSections); }
 };
 
 /**
@@ -109,6 +120,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 	FORCEINLINE bool IsEmpty() const { return TrimTimesMap.IsEmpty(); }
 	bool Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection);
 	FLSATSectionsContainer& Add(const FLSATTrimTimes& TrimTimes, const FLSATSectionsContainer& SectionsContainer);
+	void Remove(const FLSATTrimTimes& TrimTimes) { TrimTimesMap.Remove(TrimTimes); }
 };
 
 /**

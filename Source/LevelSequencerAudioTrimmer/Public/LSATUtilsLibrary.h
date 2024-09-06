@@ -94,9 +94,9 @@ public:
 
 	/** Resets the start frame offset of an audio section to 0 and sets a new sound wave.
 	 * @param AudioSection The audio section to modify.
-	 * @param NewSound The new sound wave to set for the audio section. */
+	 * @param OptionalNewSound The new sound wave to set for the audio section. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer")
-	static void ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* NewSound);
+	static void ResetTrimmedAudioSection(UMovieSceneAudioSection* AudioSection, USoundWave* OptionalNewSound = nullptr);
 
 	/** Deletes a temporary WAV file from the file system. * 
 	 * @param FilePath The file path of the WAV file to delete.
@@ -131,4 +131,11 @@ public:
 	 * @return A struct containing the start and end times in milliseconds. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
 	static FLSATTrimTimes CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection);
+
+	/** Splits the looping segments in the given trim times into multiple sections.
+	 * Appends the original and newly created sections to the output container.
+	 * @param OutNewSectionsContainer Returns original and new sections.
+	 * @param TrimTimes Specifies the trim times for the section to be split. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
+	static void SplitLoopingSections(FLSATSectionsContainer& OutNewSectionsContainer, const FLSATTrimTimes& TrimTimes);
 };

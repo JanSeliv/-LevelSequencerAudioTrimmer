@@ -44,7 +44,10 @@ bool FLSATTrimTimes::IsUsageSimilarToTotalDuration() const
 // Returns true if the start and end times are valid.
 bool FLSATTrimTimes::IsValid() const
 {
-	return StartTimeMs >= 0 && EndTimeMs >= 0 && SoundWave != nullptr;
+	return StartTimeMs >= 0
+		&& EndTimeMs >= 0
+		&& SoundWave != nullptr
+		&& AudioSection != nullptr;
 }
 
 // Returns true if the start and end times are similar to the other trim times within the given tolerance.
