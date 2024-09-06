@@ -107,7 +107,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 			const FLSATSectionsContainer& Sections = InnerIt.Value;
 			USoundWave* TrimmedSoundWave = OriginalSoundWave;
 
-			if (TrimTimes.IsUsageSimilarToTotalDuration())
+			if (TrimTimes.IsSoundTrimmed())
 			{
 				UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *GetNameSafe(TrimTimes.SoundWave));
 				continue;

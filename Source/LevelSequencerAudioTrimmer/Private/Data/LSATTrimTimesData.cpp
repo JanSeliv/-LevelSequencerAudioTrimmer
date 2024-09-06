@@ -48,11 +48,13 @@ int32 FLSATTrimTimes::GetSectionStartTimeMs() const
 	return FMath::RoundToInt((SectionStartFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
 }
 
-// Returns true if usage duration and total duration are similar
-bool FLSATTrimTimes::IsUsageSimilarToTotalDuration() const
+// Returns true if the sound is already trimmer, so usage duration and total duration are similar
+bool FLSATTrimTimes::IsSoundTrimmed() const
 {
-	const int32 TotalDurationMs = GetTotalDurationMs();
-	return TotalDurationMs - GetUsageDurationMs() < ULSATSettings::Get().MinDifferenceMs;
+	const int32 MinDifferenceMs = ULSATSettings::Get().MinDifferenceMs;
+	const int32 DifferenceMs = GetTotalDurationMs() - GetUsageDurationMs();
+	return DifferenceMs < MinDifferenceMs
+		&& SoundTrimStartMs < MinDifferenceMs;
 }
 
 // Returns true if the start and end times are valid.
