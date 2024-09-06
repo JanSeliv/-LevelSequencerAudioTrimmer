@@ -58,6 +58,16 @@ bool FLSATTrimTimes::IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) c
 		FMath::Abs(EndTimeMs - Other.EndTimeMs) <= ToleranceMs;
 }
 
+// Returns the string representation of the trim times that might be useful for logging
+FString FLSATTrimTimes::ToString() const
+{
+	const TRange<FFrameNumber> SectionRange = AudioSection ? AudioSection->GetRange() : TRange<FFrameNumber>::Empty();
+	return FString::Printf(TEXT("SoundWave: %s | StartTimeMs: %d | EndTimeMs: %d | LevelSequence: %s | SectionRange: [%d, %d]"),
+	                       *GetNameSafe(SoundWave), StartTimeMs, EndTimeMs, *GetNameSafe(LevelSequence),
+	                       FMath::RoundToInt(SectionRange.GetLowerBoundValue().Value / 1000.f),
+	                       FMath::RoundToInt(SectionRange.GetUpperBoundValue().Value / 1000.f));
+}
+
 // Equal operator for comparing in TMap.
 bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 {

@@ -60,6 +60,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** Returns true if the start and end times are similar to the other trim times within the given tolerance. */
 	bool IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) const;
 
+	/** Returns the string representation of the trim times that might be useful for logging. */
+	FString ToString() const;
+
 	/** Equal operator for comparing in TMap. */
 	bool operator==(const FLSATTrimTimes& Other) const;
 
