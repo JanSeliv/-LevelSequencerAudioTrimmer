@@ -5,6 +5,7 @@
 #include "LSATSettings.h"
 //---
 #include "LevelSequence.h"
+#include "MovieScene.h"
 #include "Sections/MovieSceneAudioSection.h"
 #include "Sound/SoundWave.h"
 //---
@@ -32,6 +33,19 @@ bool FLSATTrimTimes::IsLooping() const
 int32 FLSATTrimTimes::GetTotalDurationMs() const
 {
 	return SoundWave ? static_cast<int32>(SoundWave->Duration * 1000.0f) : 0;
+}
+
+// Returns the actual start time of the audio section in the level Sequence in milliseconds
+int32 FLSATTrimTimes::GetSectionStartTimeMs() const
+{
+	if (!IsValid())
+	{
+		return 0;
+	}
+
+	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
+	const FFrameNumber SectionStartFrame = AudioSection->GetInclusiveStartFrame();
+	return FMath::RoundToInt((SectionStartFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
 }
 
 // Returns true if usage duration and total duration are similar

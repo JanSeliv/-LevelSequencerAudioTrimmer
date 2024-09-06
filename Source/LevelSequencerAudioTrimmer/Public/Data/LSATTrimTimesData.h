@@ -51,6 +51,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration. */
 	int32 GetTotalDurationMs() const;
 
+	/** Returns the actual start time of the audio section in the level Sequence in milliseconds. */
+	int32 GetSectionStartTimeMs() const;
+
 	/** Returns true if usage duration and total duration are similar. */
 	bool IsUsageSimilarToTotalDuration() const;
 
