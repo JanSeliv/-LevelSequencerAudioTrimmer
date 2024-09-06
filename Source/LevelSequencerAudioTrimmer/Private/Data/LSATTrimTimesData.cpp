@@ -18,14 +18,14 @@
 /** Invalid trim times. */
 const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1};
 
-FLSATTrimTimes::FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs)
-	: StartTimeMs(InStartTimeMs), EndTimeMs(InEndTimeMs) {}
+FLSATTrimTimes::FLSATTrimTimes(int32 InSoundTrimStartMs, int32 InSoundTrimEndMs)
+	: SoundTrimStartMs(InSoundTrimStartMs), SoundTrimEndMs(InSoundTrimEndMs) {}
 
 // Returns true if the audio section is looping (repeating playing from the start)
 bool FLSATTrimTimes::IsLooping() const
 {
-	const int32 DifferenceMs = EndTimeMs - GetTotalDurationMs();
-	return EndTimeMs > GetTotalDurationMs()
+	const int32 DifferenceMs = SoundTrimEndMs - GetTotalDurationMs();
+	return SoundTrimEndMs > GetTotalDurationMs()
 		&& DifferenceMs >= ULSATSettings::Get().MinDifferenceMs;
 }
 
@@ -58,8 +58,8 @@ bool FLSATTrimTimes::IsUsageSimilarToTotalDuration() const
 // Returns true if the start and end times are valid.
 bool FLSATTrimTimes::IsValid() const
 {
-	return StartTimeMs >= 0
-		&& EndTimeMs >= 0
+	return SoundTrimStartMs >= 0
+		&& SoundTrimEndMs >= 0
 		&& SoundWave != nullptr
 		&& AudioSection != nullptr;
 }
@@ -68,16 +68,16 @@ bool FLSATTrimTimes::IsValid() const
 bool FLSATTrimTimes::IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) const
 {
 	return SoundWave == Other.SoundWave &&
-		FMath::Abs(StartTimeMs - Other.StartTimeMs) <= ToleranceMs &&
-		FMath::Abs(EndTimeMs - Other.EndTimeMs) <= ToleranceMs;
+		FMath::Abs(SoundTrimStartMs - Other.SoundTrimStartMs) <= ToleranceMs &&
+		FMath::Abs(SoundTrimEndMs - Other.SoundTrimEndMs) <= ToleranceMs;
 }
 
 // Returns the string representation of the trim times that might be useful for logging
 FString FLSATTrimTimes::ToString() const
 {
 	const TRange<FFrameNumber> SectionRange = AudioSection ? AudioSection->GetRange() : TRange<FFrameNumber>::Empty();
-	return FString::Printf(TEXT("SoundWave: %s | StartTimeMs: %d | EndTimeMs: %d | LevelSequence: %s | SectionRange: [%d, %d]"),
-	                       *GetNameSafe(SoundWave), StartTimeMs, EndTimeMs, *GetNameSafe(LevelSequence),
+	return FString::Printf(TEXT("SoundWave: %s | SoundTrimStartMs: %d | SoundTrimEndMs: %d | LevelSequence: %s | SectionRange: [%d, %d]"),
+	                       *GetNameSafe(SoundWave), SoundTrimStartMs, SoundTrimEndMs, *GetNameSafe(LevelSequence),
 	                       FMath::RoundToInt(SectionRange.GetLowerBoundValue().Value / 1000.f),
 	                       FMath::RoundToInt(SectionRange.GetUpperBoundValue().Value / 1000.f));
 }
@@ -93,8 +93,8 @@ bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 {
 	return GetTypeHash(TrimTimes.SoundWave) ^
-		GetTypeHash(TrimTimes.StartTimeMs) ^
-		GetTypeHash(TrimTimes.EndTimeMs);
+		GetTypeHash(TrimTimes.SoundTrimStartMs) ^
+		GetTypeHash(TrimTimes.SoundTrimEndMs);
 }
 
 /*********************************************************************************************

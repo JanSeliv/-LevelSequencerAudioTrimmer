@@ -19,16 +19,24 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	FLSATTrimTimes() = default;
 	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs);
 
+	/*********************************************************************************************
+	 * Data
+	 ********************************************************************************************* */
+
 	/** Invalid trim times. */
 	static const FLSATTrimTimes Invalid;
 
-	/** Start time in milliseconds to trim from. */
+	/** The start time in milliseconds from the sound asset where trimming begins.
+	* This value represents the point in the sound where playback starts after the audio section has been trimmed from the left,
+	meaning the sound does not necessarily start from its original beginning. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	int32 StartTimeMs = 0;
+	int32 SoundTrimStartMs = 0;
 
-	/** End time in milliseconds to trim to. */
+	/** The end time in milliseconds of the sound asset where trimming ends.
+	* This represents the last used portion of the sound before the audio section finishes or is trimmed on the right,
+	meaning the sound may end before reaching its full duration. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	int32 EndTimeMs = 0;
+	int32 SoundTrimEndMs = 0;
 
 	/** The sound wave associated with these trim times. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
@@ -42,11 +50,15 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TObjectPtr<class ULevelSequence> LevelSequence = nullptr;
 
+	/*********************************************************************************************
+	 * Methods
+	 ********************************************************************************************* */
+
 	/** Returns true if the audio section is looping (repeating playing from the start). */
 	bool IsLooping() const;
 
 	/** Returns the duration of actual usage in milliseconds. */
-	FORCEINLINE int32 GetUsageDurationMs() const { return EndTimeMs - StartTimeMs; }
+	FORCEINLINE int32 GetUsageDurationMs() const { return SoundTrimEndMs - SoundTrimStartMs; }
 
 	/** Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration. */
 	int32 GetTotalDurationMs() const;

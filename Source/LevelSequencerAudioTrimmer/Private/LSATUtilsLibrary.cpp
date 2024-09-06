@@ -553,8 +553,8 @@ bool ULSATUtilsLibrary::TrimAudio(const FLSATTrimTimes& TrimTimes, const FString
 	FString Output;
 	FString Errors;
 
-	const float StartTimeSec = TrimTimes.StartTimeMs / 1000.0f;
-	const float EndTimeSec = TrimTimes.EndTimeMs / 1000.0f;
+	const float StartTimeSec = TrimTimes.SoundTrimStartMs / 1000.0f;
+	const float EndTimeSec = TrimTimes.SoundTrimEndMs / 1000.0f;
 	const FString& FfmpegPath = FLevelSequencerAudioTrimmerEdModule::GetFfmpegPath();
 	const FString CommandLineArgs = FString::Printf(TEXT("-i \"%s\" -ss %.2f -to %.2f -c copy \"%s\" -y"), *InputPath, StartTimeSec, EndTimeSec, *OutputPath);
 
@@ -766,8 +766,8 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	}
 
 	FLSATTrimTimes TrimTimes;
-	TrimTimes.StartTimeMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
-	TrimTimes.EndTimeMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
+	TrimTimes.SoundTrimStartMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
+	TrimTimes.SoundTrimEndMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
 	TrimTimes.SoundWave = SoundWave;
 	TrimTimes.AudioSection = AudioSection;
 	TrimTimes.LevelSequence = LevelSequence;
@@ -799,10 +799,10 @@ void ULSATUtilsLibrary::SplitLoopingSections(FLSATSectionsContainer& OutNewSecti
 	OutNewSectionsContainer.Add(Section);
 
 	// Continue splitting until the end time is reached
-	while (CurrentStartTimeMs < TrimTimes.EndTimeMs)
+	while (CurrentStartTimeMs < TrimTimes.SoundTrimEndMs)
 	{
 		// Calculate the next split end time
-		const int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + TotalSoundDurationMs, TrimTimes.EndTimeMs);
+		const int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + TotalSoundDurationMs, TrimTimes.SoundTrimEndMs);
 
 		// Convert the current start time to frame time for splitting
 		const FFrameNumber SplitFrame = TickResolution.AsFrameNumber(CurrentStartTimeMs / 1000.f);
