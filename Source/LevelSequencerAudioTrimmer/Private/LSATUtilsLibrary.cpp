@@ -783,39 +783,42 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 // Splits the looping segments in the given trim times into multiple sections
 void ULSATUtilsLibrary::SplitLoopingSections(FLSATSectionsContainer& OutNewSectionsContainer, const FLSATTrimTimes& TrimTimes)
 {
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting looping sections for %s"), *TrimTimes.ToString());
 	if (!ensureMsgf(TrimTimes.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TrimTimes' is not valid | %s"), __LINE__, __FUNCTION__, *TrimTimes.ToString()))
 	{
+		UE_LOG(LogAudioTrimmer, Error, TEXT("Invalid TrimTimes: %s"), *TrimTimes.ToString());
 		return;
 	}
 
 	const FFrameRate TickResolution = TrimTimes.LevelSequence->GetMovieScene()->GetTickResolution();
 	const int32 TotalSoundDurationMs = TrimTimes.GetTotalDurationMs();
-	const int32 SectionStartMs = TrimTimes.GetSectionStartTimeMs();
+	const int32 SectionStartMs = TrimTimes.GetSectionInclusiveStartTimeMs();
+	const int32 SectionEndMs = TrimTimes.GetSectionExclusiveEndTimeMs();
 
-	// Ensure the first split respects the section's start in the sequence
-	int32 CurrentStartTimeMs = FMath::Max(SectionStartMs + TotalSoundDurationMs, SectionStartMs);
+	UE_LOG(LogAudioTrimmer, Log, TEXT("TotalSoundDurationMs: %d, SectionStartMs: %d, SoundTrimEndMs: %d"), TotalSoundDurationMs, SectionStartMs, TrimTimes.SoundTrimEndMs);
 
 	UMovieSceneAudioSection* Section = TrimTimes.AudioSection;
 	OutNewSectionsContainer.Add(Section);
 
-	// Continue splitting until the end time is reached
-	while (CurrentStartTimeMs < TrimTimes.SoundTrimEndMs)
+	int32 CurrentStartTimeMs = SectionStartMs;
+	while (CurrentStartTimeMs < SectionEndMs - TotalSoundDurationMs)
 	{
-		// Calculate the next split end time
-		const int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + TotalSoundDurationMs, TrimTimes.SoundTrimEndMs);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("CurrentStartTimeMs: %d, TrimTimes.SoundTrimEndMs: %d"), CurrentStartTimeMs, TrimTimes.SoundTrimEndMs);
 
-		// Convert the current start time to frame time for splitting
-		const FFrameNumber SplitFrame = TickResolution.AsFrameNumber(CurrentStartTimeMs / 1000.f);
+		// Calculate the next split end time based on sound duration
+		const int32 NextEndTimeMs = CurrentStartTimeMs + TotalSoundDurationMs;
+		UE_LOG(LogAudioTrimmer, Log, TEXT("NextEndTimeMs: %d"), NextEndTimeMs);
+
+		const FFrameNumber SplitFrame = TickResolution.AsFrameNumber(NextEndTimeMs / 1000.f);
 		const FQualifiedFrameTime SplitTime(SplitFrame, TickResolution);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("Attempting to split at time: %d ms, which is frame: %d"), CurrentStartTimeMs, SplitTime.Time.GetFrame().Value);
 
-		// Check if the section contains the split time
 		if (!Section->GetRange().Contains(SplitTime.Time.GetFrame()))
 		{
 			UE_LOG(LogAudioTrimmer, Error, TEXT("Section '%s' does not contain the split time: %d. Exiting."), *Section->GetName(), SplitTime.Time.GetFrame().Value);
 			return;
 		}
 
-		// Perform the split
 		constexpr bool bDeleteKeysWhenTrimming = false;
 		UMovieSceneAudioSection* NewSection = Cast<UMovieSceneAudioSection>(Section->SplitSection(SplitTime, bDeleteKeysWhenTrimming));
 		if (!NewSection)
@@ -824,12 +827,15 @@ void ULSATUtilsLibrary::SplitLoopingSections(FLSATSectionsContainer& OutNewSecti
 			return;
 		}
 
-		// Reset the newly created section
+		UE_LOG(LogAudioTrimmer, Log, TEXT("Created new section: %s with range: [%d, %d]"), *NewSection->GetName(), NewSection->GetInclusiveStartFrame().Value, NewSection->GetExclusiveEndFrame().Value);
+
 		ResetTrimmedAudioSection(NewSection);
 		OutNewSectionsContainer.Add(NewSection);
-		Section = NewSection;
 
-		// Move to the next split time
-		CurrentStartTimeMs = NextEndTimeMs;
+		Section = NewSection;
+		CurrentStartTimeMs = NextEndTimeMs; // Move to the next split point
+		UE_LOG(LogAudioTrimmer, Log, TEXT("Next CurrentStartTimeMs: %d"), CurrentStartTimeMs);
 	}
+
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting complete, split into %d new sections."), OutNewSectionsContainer.Num());
 }

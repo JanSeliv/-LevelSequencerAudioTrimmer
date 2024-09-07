@@ -36,7 +36,7 @@ int32 FLSATTrimTimes::GetTotalDurationMs() const
 }
 
 // Returns the actual start time of the audio section in the level Sequence in milliseconds
-int32 FLSATTrimTimes::GetSectionStartTimeMs() const
+int32 FLSATTrimTimes::GetSectionInclusiveStartTimeMs() const
 {
 	if (!IsValid())
 	{
@@ -46,6 +46,19 @@ int32 FLSATTrimTimes::GetSectionStartTimeMs() const
 	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
 	const FFrameNumber SectionStartFrame = AudioSection->GetInclusiveStartFrame();
 	return FMath::RoundToInt((SectionStartFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
+}
+
+// Returns the actual end time of the audio section in the level Sequence in milliseconds
+int32 FLSATTrimTimes::GetSectionExclusiveEndTimeMs() const
+{
+	if (!IsValid())
+	{
+		return 0;
+	}
+
+	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
+	const FFrameNumber SectionEndFrame = AudioSection->GetExclusiveEndFrame();
+	return FMath::RoundToInt((SectionEndFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
 }
 
 // Returns true if the sound is already trimmer, so usage duration and total duration are similar

@@ -64,7 +64,10 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	int32 GetTotalDurationMs() const;
 
 	/** Returns the actual start time of the audio section in the level Sequence in milliseconds. */
-	int32 GetSectionStartTimeMs() const;
+	int32 GetSectionInclusiveStartTimeMs() const;
+
+	/** Returns the actual end time of the audio section in the level Sequence in milliseconds. */
+	int32 GetSectionExclusiveEndTimeMs() const;
 
 	/** Returns true if the sound is already trimmer, so usage duration and total duration are similar. */
 	bool IsSoundTrimmed() const;
