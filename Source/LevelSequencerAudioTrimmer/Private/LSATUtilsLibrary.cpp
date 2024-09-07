@@ -791,7 +791,7 @@ void ULSATUtilsLibrary::SplitLoopingSections(FLSATSectionsContainer& OutNewSecti
 	}
 
 	const FFrameRate TickResolution = TrimTimes.LevelSequence->GetMovieScene()->GetTickResolution();
-	const int32 TotalSoundDurationMs = TrimTimes.GetTotalDurationMs();
+	const int32 TotalSoundDurationMs = TrimTimes.GetSoundTotalDurationMs();
 	const int32 SectionStartMs = TrimTimes.GetSectionInclusiveStartTimeMs();
 	const int32 SectionEndMs = TrimTimes.GetSectionExclusiveEndTimeMs();
 

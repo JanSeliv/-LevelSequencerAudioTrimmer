@@ -24,13 +24,13 @@ FLSATTrimTimes::FLSATTrimTimes(int32 InSoundTrimStartMs, int32 InSoundTrimEndMs)
 // Returns true if the audio section is looping (repeating playing from the start)
 bool FLSATTrimTimes::IsLooping() const
 {
-	const int32 DifferenceMs = SoundTrimEndMs - GetTotalDurationMs();
-	return SoundTrimEndMs > GetTotalDurationMs()
+	const int32 DifferenceMs = SoundTrimEndMs - GetSoundTotalDurationMs();
+	return SoundTrimEndMs > GetSoundTotalDurationMs()
 		&& DifferenceMs >= ULSATSettings::Get().MinDifferenceMs;
 }
 
 // Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration
-int32 FLSATTrimTimes::GetTotalDurationMs() const
+int32 FLSATTrimTimes::GetSoundTotalDurationMs() const
 {
 	return SoundWave ? static_cast<int32>(SoundWave->Duration * 1000.0f) : 0;
 }
@@ -65,7 +65,7 @@ int32 FLSATTrimTimes::GetSectionExclusiveEndTimeMs() const
 bool FLSATTrimTimes::IsSoundTrimmed() const
 {
 	const int32 MinDifferenceMs = ULSATSettings::Get().MinDifferenceMs;
-	const int32 DifferenceMs = GetTotalDurationMs() - GetUsageDurationMs();
+	const int32 DifferenceMs = GetSoundTotalDurationMs() - GetUsageDurationMs();
 	return DifferenceMs < MinDifferenceMs
 		&& SoundTrimStartMs < MinDifferenceMs;
 }
