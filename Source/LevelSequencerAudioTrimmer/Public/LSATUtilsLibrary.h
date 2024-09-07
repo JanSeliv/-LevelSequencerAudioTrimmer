@@ -135,7 +135,8 @@ public:
 	/** Splits the looping segments in the given trim times into multiple sections.
 	 * Appends the original and newly created sections to the output container.
 	 * @param OutNewSectionsContainer Returns original and new sections.
+	 * @param InAudioSection The audio section to split.
 	 * @param TrimTimes Specifies the trim times for the section to be split. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
-	static void SplitLoopingSections(FLSATSectionsContainer& OutNewSectionsContainer, const FLSATTrimTimes& TrimTimes);
+	static void SplitLoopingSection(FLSATSectionsContainer& OutNewSectionsContainer, UMovieSceneAudioSection* InAudioSection, const FLSATTrimTimes& TrimTimes);
 };

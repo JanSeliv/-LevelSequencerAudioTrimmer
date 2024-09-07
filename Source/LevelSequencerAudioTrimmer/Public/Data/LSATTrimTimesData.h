@@ -42,14 +42,6 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TObjectPtr<USoundWave> SoundWave = nullptr;
 
-	/** The track on level sequence associated with these trim times. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TObjectPtr<class UMovieSceneAudioSection> AudioSection = nullptr;
-
-	/** The level sequence associated with these trim times. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TObjectPtr<class ULevelSequence> LevelSequence = nullptr;
-
 	/*********************************************************************************************
 	 * Methods
 	 ********************************************************************************************* */
@@ -63,11 +55,11 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration. */
 	int32 GetSoundTotalDurationMs() const;
 
-	/** Returns the actual start time of the audio section in the level Sequence in milliseconds. */
-	int32 GetSectionInclusiveStartTimeMs() const;
+	/** Returns the actual start time of the audio section in the level Sequence in milliseconds, otherwise -1. */
+	static int32 GetSectionInclusiveStartTimeMs(const class UMovieSceneAudioSection* InAudioSection);
 
-	/** Returns the actual end time of the audio section in the level Sequence in milliseconds. */
-	int32 GetSectionExclusiveEndTimeMs() const;
+	/** Returns the actual end time of the audio section in the level Sequence in milliseconds, otherwise -1. */
+	static int32 GetSectionExclusiveEndTimeMs(const class UMovieSceneAudioSection* InAudioSection);
 
 	/** Returns true if the sound is already trimmer, so usage duration and total duration are similar. */
 	bool IsSoundTrimmed() const;
@@ -157,7 +149,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 	TMap<TObjectPtr<USoundWave>, FLSATTrimTimesMap> TrimTimesMultiMap;
 
 	/** Returns all sounds waves from this multimap that satisfies the given predicate. */
-	void GetSounds(TArray<USoundWave*>& OutSoundWaves, TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)> Predicate) const;
+	void GetSounds(TArray<USoundWave*>& OutSoundWaves, const TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)>& Predicate) const;
 
 	auto begin() const { return TrimTimesMultiMap.begin(); }
 	auto end() const { return TrimTimesMultiMap.end(); }

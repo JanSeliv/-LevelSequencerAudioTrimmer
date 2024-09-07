@@ -36,28 +36,34 @@ int32 FLSATTrimTimes::GetSoundTotalDurationMs() const
 }
 
 // Returns the actual start time of the audio section in the level Sequence in milliseconds
-int32 FLSATTrimTimes::GetSectionInclusiveStartTimeMs() const
+int32 FLSATTrimTimes::GetSectionInclusiveStartTimeMs(const UMovieSceneAudioSection* InAudioSection)
 {
-	if (!IsValid())
+	if (!InAudioSection)
 	{
-		return 0;
+		return INDEX_NONE;
 	}
 
+	const ULevelSequence* LevelSequence = InAudioSection->GetTypedOuter<ULevelSequence>();
+	checkf(LevelSequence, TEXT("ERROR: [%i] %hs:\n'LevelSequence' is null!"), __LINE__, __FUNCTION__);
 	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
-	const FFrameNumber SectionStartFrame = AudioSection->GetInclusiveStartFrame();
+
+	const FFrameNumber SectionStartFrame = InAudioSection->GetInclusiveStartFrame();
 	return FMath::RoundToInt((SectionStartFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
 }
 
 // Returns the actual end time of the audio section in the level Sequence in milliseconds
-int32 FLSATTrimTimes::GetSectionExclusiveEndTimeMs() const
+int32 FLSATTrimTimes::GetSectionExclusiveEndTimeMs(const UMovieSceneAudioSection* InAudioSection)
 {
-	if (!IsValid())
+	if (!InAudioSection)
 	{
-		return 0;
+		return INDEX_NONE;
 	}
 
+	const ULevelSequence* LevelSequence = InAudioSection->GetTypedOuter<ULevelSequence>();
+	checkf(LevelSequence, TEXT("ERROR: [%i] %hs:\n'LevelSequence' is null!"), __LINE__, __FUNCTION__);
 	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
-	const FFrameNumber SectionEndFrame = AudioSection->GetExclusiveEndFrame();
+
+	const FFrameNumber SectionEndFrame = InAudioSection->GetExclusiveEndFrame();
 	return FMath::RoundToInt((SectionEndFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
 }
 
@@ -75,8 +81,7 @@ bool FLSATTrimTimes::IsValid() const
 {
 	return SoundTrimStartMs >= 0
 		&& SoundTrimEndMs >= 0
-		&& SoundWave != nullptr
-		&& AudioSection != nullptr;
+		&& SoundWave != nullptr;
 }
 
 // Returns true if the start and end times are similar to the other trim times within the given tolerance.
@@ -90,11 +95,8 @@ bool FLSATTrimTimes::IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) c
 // Returns the string representation of the trim times that might be useful for logging
 FString FLSATTrimTimes::ToString() const
 {
-	const TRange<FFrameNumber> SectionRange = AudioSection ? AudioSection->GetRange() : TRange<FFrameNumber>::Empty();
-	return FString::Printf(TEXT("SoundWave: %s | SoundTrimStartMs: %d | SoundTrimEndMs: %d | LevelSequence: %s | SectionRange: [%d, %d]"),
-	                       *GetNameSafe(SoundWave), SoundTrimStartMs, SoundTrimEndMs, *GetNameSafe(LevelSequence),
-	                       FMath::RoundToInt(SectionRange.GetLowerBoundValue().Value / 1000.f),
-	                       FMath::RoundToInt(SectionRange.GetUpperBoundValue().Value / 1000.f));
+	return FString::Printf(TEXT("SoundWave: %s | SoundTrimStartMs: %d | SoundTrimEndMs: %d"),
+	                       *GetNameSafe(SoundWave), SoundTrimStartMs, SoundTrimEndMs);
 }
 
 // Equal operator for comparing in TMap.
@@ -170,7 +172,7 @@ FLSATSectionsContainer& FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, 
  ********************************************************************************************* */
 
 // Returns all sounds waves from this multimap that satisfies the given predicate
-void FLSATTrimTimesMultiMap::GetSounds(TArray<USoundWave*>& OutSoundWaves, TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)> Predicate) const
+void FLSATTrimTimesMultiMap::GetSounds(TArray<USoundWave*>& OutSoundWaves, const TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)>& Predicate) const
 {
 	if (!OutSoundWaves.IsEmpty())
 	{
