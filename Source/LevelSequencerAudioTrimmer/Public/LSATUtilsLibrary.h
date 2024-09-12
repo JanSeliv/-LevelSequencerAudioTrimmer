@@ -6,6 +6,7 @@
 //---
 #include "LSATUtilsLibrary.generated.h"
 
+class UMovieSceneSection;
 class UMovieSceneAudioSection;
 class ULevelSequence;
 class USoundWave;
@@ -14,6 +15,7 @@ struct FLSATTrimTimes;
 struct FLSATSectionsContainer;
 struct FLSATTrimTimesMap;
 struct FLSATTrimTimesMultiMap;
+struct FFrameRate;
 
 DEFINE_LOG_CATEGORY_STATIC(LogAudioTrimmer, Log, All);
 
@@ -105,7 +107,7 @@ public:
 	static bool DeleteTempWavFile(const FString& FilePath);
 
 	/*********************************************************************************************
-	 * Utilities
+	 * Helpers
 	 ********************************************************************************************* */
 public:
 	/** Retrieves all audio sections from the given level sequence.
@@ -139,4 +141,28 @@ public:
 	 * @param TrimTimes Specifies the trim times for the section to be split. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
 	static void SplitLoopingSection(FLSATSectionsContainer& OutNewSectionsContainer, UMovieSceneAudioSection* InAudioSection, const FLSATTrimTimes& TrimTimes);
+
+	/** Returns the actual start time of the audio section in the level Sequence in milliseconds, otherwise -1. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static int32 GetSectionInclusiveStartTimeMs(const UMovieSceneSection* InSection);
+
+	/** Returns the actual end time of the audio section in the level Sequence in milliseconds, otherwise -1. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static int32 GetSectionExclusiveEndTimeMs(const UMovieSceneSection* InSection);
+
+	/** Converts seconds to frames based on the frame rate, or -1 if cannot convert. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static int32 ConvertMsToFrame(int32 InMilliseconds, const FFrameRate& TickResolution);
+
+	/** Converts frames to milliseconds based on the frame rate, or -1 if cannot convert. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static int32 ConvertFrameToMs(const FFrameNumber& InFrame, const FFrameRate& TickResolution);
+
+	/** Returns the tick resolution of the given section. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static FFrameRate GetTickResolution(const UMovieSceneSection* InSection);
+
+	/** Returns the Level Sequence of the given section. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static class ULevelSequence* GetLevelSequence(const UMovieSceneSection* InSection);
 };

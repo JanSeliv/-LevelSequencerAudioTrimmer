@@ -3,6 +3,7 @@
 #include "Data/LSATTrimTimesData.h"
 //---
 #include "LSATSettings.h"
+#include "LSATUtilsLibrary.h"
 //---
 #include "LevelSequence.h"
 #include "MovieScene.h"
@@ -21,6 +22,22 @@ const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1};
 FLSATTrimTimes::FLSATTrimTimes(int32 InSoundTrimStartMs, int32 InSoundTrimEndMs)
 	: SoundTrimStartMs(InSoundTrimStartMs), SoundTrimEndMs(InSoundTrimEndMs) {}
 
+/*********************************************************************************************
+ * Trim Times Methods
+ ********************************************************************************************* */
+
+// Returns SoundTrimStartMs in frames based on the tick resolution, or -1 if cannot convert
+int32 FLSATTrimTimes::GetSoundTrimStartFrame(const struct FFrameRate& TickResolution) const
+{
+	return ULSATUtilsLibrary::ConvertMsToFrame(SoundTrimStartMs, TickResolution);
+}
+
+// Returns SoundTrimEndMs in frames based on the tick resolution, or -1 if cannot convert
+int32 FLSATTrimTimes::GetSoundTrimEndFrame(const struct FFrameRate& TickResolution) const
+{
+	return ULSATUtilsLibrary::ConvertMsToFrame(SoundTrimEndMs, TickResolution);
+}
+
 // Returns true if the audio section is looping (repeating playing from the start)
 bool FLSATTrimTimes::IsLooping() const
 {
@@ -29,42 +46,32 @@ bool FLSATTrimTimes::IsLooping() const
 		&& DifferenceMs >= ULSATSettings::Get().MinDifferenceMs;
 }
 
+// Returns the usage percentage of the sound wave asset in 0-100 range
+float FLSATTrimTimes::GetUsagePercentage() const
+{
+	if (IsSoundTrimmed())
+	{
+		return 100.f;
+	}
+
+	if (GetSoundTotalDurationMs() <= 0)
+	{
+		return 0.f;
+	}
+
+	return (GetUsageDurationMs() / static_cast<float>(GetSoundTotalDurationMs())) * 100.f;
+}
+
+// Returns the number of frames the sound wave asset is used
+int32 FLSATTrimTimes::GetUsagesFrames(const FFrameRate& TickResolution) const
+{
+	return ULSATUtilsLibrary::ConvertMsToFrame(GetUsageDurationMs(), TickResolution);
+}
+
 // Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration
 int32 FLSATTrimTimes::GetSoundTotalDurationMs() const
 {
-	return SoundWave ? static_cast<int32>(SoundWave->Duration * 1000.0f) : 0;
-}
-
-// Returns the actual start time of the audio section in the level Sequence in milliseconds
-int32 FLSATTrimTimes::GetSectionInclusiveStartTimeMs(const UMovieSceneAudioSection* InAudioSection)
-{
-	if (!InAudioSection)
-	{
-		return INDEX_NONE;
-	}
-
-	const ULevelSequence* LevelSequence = InAudioSection->GetTypedOuter<ULevelSequence>();
-	checkf(LevelSequence, TEXT("ERROR: [%i] %hs:\n'LevelSequence' is null!"), __LINE__, __FUNCTION__);
-	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
-
-	const FFrameNumber SectionStartFrame = InAudioSection->GetInclusiveStartFrame();
-	return FMath::RoundToInt((SectionStartFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
-}
-
-// Returns the actual end time of the audio section in the level Sequence in milliseconds
-int32 FLSATTrimTimes::GetSectionExclusiveEndTimeMs(const UMovieSceneAudioSection* InAudioSection)
-{
-	if (!InAudioSection)
-	{
-		return INDEX_NONE;
-	}
-
-	const ULevelSequence* LevelSequence = InAudioSection->GetTypedOuter<ULevelSequence>();
-	checkf(LevelSequence, TEXT("ERROR: [%i] %hs:\n'LevelSequence' is null!"), __LINE__, __FUNCTION__);
-	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
-
-	const FFrameNumber SectionEndFrame = InAudioSection->GetExclusiveEndFrame();
-	return FMath::RoundToInt((SectionEndFrame.Value / TickResolution.AsDecimal()) * 1000.0f);
+	return SoundWave ? FMath::RoundToInt(SoundWave->Duration * 1000.f) : 0;
 }
 
 // Returns true if the sound is already trimmer, so usage duration and total duration are similar
@@ -84,26 +91,37 @@ bool FLSATTrimTimes::IsValid() const
 		&& SoundWave != nullptr;
 }
 
-// Returns true if the start and end times are similar to the other trim times within the given tolerance.
-bool FLSATTrimTimes::IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) const
+// Returns the string representation of the trim times that might be useful for logging
+FString FLSATTrimTimes::ToString(const FFrameRate& TickResolution) const
 {
-	return SoundWave == Other.SoundWave &&
-		FMath::Abs(SoundTrimStartMs - Other.SoundTrimStartMs) <= ToleranceMs &&
-		FMath::Abs(SoundTrimEndMs - Other.SoundTrimEndMs) <= ToleranceMs;
+	return FString::Printf(TEXT("Audio: %s "
+		"| Usage: %.2f sec (frame %d) to %.2f seconds (frame %d) "
+		"| Duration: %.2f sec (%d frames) "
+		"| Percentage Used: %1.f%%"),
+	                       *SoundWave->GetName()
+	                       , GetSoundTrimStartSeconds(), GetSoundTrimStartFrame(TickResolution), GetSoundTrimEndSeconds(), GetSoundTrimEndFrame(TickResolution)
+	                       , GetSoundTrimEndSeconds() - GetSoundTrimStartSeconds(), GetUsagesFrames(TickResolution)
+	                       , GetUsagePercentage());
 }
 
-// Returns the string representation of the trim times that might be useful for logging
-FString FLSATTrimTimes::ToString() const
+// Returns short string representation of the trim times
+FString FLSATTrimTimes::ToCompactString() const
 {
 	return FString::Printf(TEXT("SoundWave: %s | SoundTrimStartMs: %d | SoundTrimEndMs: %d"),
 	                       *GetNameSafe(SoundWave), SoundTrimStartMs, SoundTrimEndMs);
 }
 
+/*********************************************************************************************
+ * Trim Times Operators
+ ********************************************************************************************* */
+
 // Equal operator for comparing in TMap.
 bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 {
 	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
-	return IsSimilar(Other, ToleranceMs);
+	return SoundWave == Other.SoundWave
+		&& FMath::Abs(SoundTrimStartMs - Other.SoundTrimStartMs) <= ToleranceMs
+		&& FMath::Abs(SoundTrimEndMs - Other.SoundTrimEndMs) <= ToleranceMs;
 }
 
 // Hash function to TMap
@@ -144,7 +162,7 @@ class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
 {
 	const TArray<TObjectPtr<UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
 	const UMovieSceneAudioSection* Section = Sections && !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
-	return Section ? Section->GetTypedOuter<ULevelSequence>() : nullptr;
+	return ULSATUtilsLibrary::GetLevelSequence(Section);
 }
 
 // Sets the sound wave for all trim times in this map

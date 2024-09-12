@@ -8,6 +8,8 @@
 
 class USoundWave;
 
+struct FFrameRate;
+
 /**
  * Represents the start and end times in milliseconds for trimming an audio section.
  */
@@ -20,7 +22,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs);
 
 	/*********************************************************************************************
-	 * Data
+	 * Trim Times Data
 	 ********************************************************************************************* */
 
 	/** Invalid trim times. */
@@ -43,8 +45,20 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	TObjectPtr<USoundWave> SoundWave = nullptr;
 
 	/*********************************************************************************************
-	 * Methods
+	 * Trim Times Methods
 	 ********************************************************************************************* */
+
+	/** Returns SoundTrimStartMs in seconds. */
+	FORCEINLINE float GetSoundTrimStartSeconds() const { return static_cast<float>(SoundTrimStartMs) / 1000.f; }
+
+	/** Returns SoundTrimEndMs in seconds. */
+	FORCEINLINE float GetSoundTrimEndSeconds() const { return static_cast<float>(SoundTrimEndMs) / 1000.f; }
+
+	/** Returns SoundTrimStartMs in frames based on the tick resolution, or -1 if cannot convert. */
+	int32 GetSoundTrimStartFrame(const FFrameRate& TickResolution) const;
+
+	/** Returns SoundTrimEndMs in frames based on the tick resolution, or -1 if cannot convert. */
+	int32 GetSoundTrimEndFrame(const FFrameRate& TickResolution) const;
 
 	/** Returns true if the audio section is looping (repeating playing from the start). */
 	bool IsLooping() const;
@@ -52,14 +66,14 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** Returns the duration of actual usage in milliseconds. */
 	FORCEINLINE int32 GetUsageDurationMs() const { return SoundTrimEndMs - SoundTrimStartMs; }
 
+	/** Returns the usage percentage of the sound wave asset in 0-100 range. */
+	float GetUsagePercentage() const;
+
+	/** Returns the number of frames the sound wave asset is used. */
+	int32 GetUsagesFrames(const FFrameRate& TickResolution) const;
+
 	/** Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration. */
 	int32 GetSoundTotalDurationMs() const;
-
-	/** Returns the actual start time of the audio section in the level Sequence in milliseconds, otherwise -1. */
-	static int32 GetSectionInclusiveStartTimeMs(const class UMovieSceneAudioSection* InAudioSection);
-
-	/** Returns the actual end time of the audio section in the level Sequence in milliseconds, otherwise -1. */
-	static int32 GetSectionExclusiveEndTimeMs(const class UMovieSceneAudioSection* InAudioSection);
 
 	/** Returns true if the sound is already trimmer, so usage duration and total duration are similar. */
 	bool IsSoundTrimmed() const;
@@ -67,12 +81,16 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** Returns true if the start and end times are valid. */
 	bool IsValid() const;
 
-	/** Returns true if the start and end times are similar to the other trim times within the given tolerance. */
-	bool IsSimilar(const FLSATTrimTimes& Other, int32 ToleranceMs) const;
-
 	/** Returns the string representation of the trim times that might be useful for logging. */
-	FString ToString() const;
+	FString ToString(const FFrameRate& TickResolution) const;
 
+	/** Returns short string representation of the trim times. */
+	FString ToCompactString() const;
+
+	/*********************************************************************************************
+	 * Trim Times Operators
+	 ********************************************************************************************* */
+public:
 	/** Equal operator for comparing in TMap. */
 	bool operator==(const FLSATTrimTimes& Other) const;
 

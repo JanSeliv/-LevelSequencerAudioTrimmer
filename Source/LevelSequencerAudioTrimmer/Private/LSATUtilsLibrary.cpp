@@ -271,7 +271,7 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 	{
 		if (It.Key.IsLooping())
 		{
-			UE_LOG(LogAudioTrimmer, Log, TEXT("Found looping %s"), *It.Key.ToString());
+			UE_LOG(LogAudioTrimmer, Log, TEXT("Found looping %s"), *It.Key.ToCompactString());
 			return true;
 		}
 		return false;
@@ -556,8 +556,8 @@ bool ULSATUtilsLibrary::TrimAudio(const FLSATTrimTimes& TrimTimes, const FString
 	FString Output;
 	FString Errors;
 
-	const float StartTimeSec = TrimTimes.SoundTrimStartMs / 1000.0f;
-	const float EndTimeSec = TrimTimes.SoundTrimEndMs / 1000.0f;
+	const float StartTimeSec = TrimTimes.GetSoundTrimStartSeconds();
+	const float EndTimeSec = TrimTimes.GetSoundTrimEndSeconds();
 	const FString& FfmpegPath = FLevelSequencerAudioTrimmerEdModule::GetFfmpegPath();
 	const FString CommandLineArgs = FString::Printf(TEXT("-i \"%s\" -ss %.2f -to %.2f -c copy \"%s\" -y"), *InputPath, StartTimeSec, EndTimeSec, *OutputPath);
 
@@ -653,7 +653,7 @@ bool ULSATUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
 }
 
 /*********************************************************************************************
- * Utilities
+ * Helpers
  ********************************************************************************************* */
 
 // Retrieves all audio sections from the given level sequence
@@ -742,62 +742,53 @@ void ULSATUtilsLibrary::CalculateTrimTimesInAllSections(FLSATTrimTimesMap& OutTr
 //Calculates the start and end times in milliseconds for trimming an audio section
 FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection)
 {
-	const ULevelSequence* LevelSequence = AudioSection ? AudioSection->GetTypedOuter<ULevelSequence>() : nullptr;
-	if (!LevelSequence)
-	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid LevelSequence or AudioSection."));
-		return FLSATTrimTimes::Invalid;
-	}
-
-	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
-
-	// Get the audio start offset in frames (relative to the audio asset)
-	const int32 AudioStartOffsetFrames = AudioSection->GetStartOffset().Value;
-	const float AudioStartOffsetSeconds = AudioStartOffsetFrames / TickResolution.AsDecimal();
-
-	// Get the duration of the section on the track (in frames)
-	const int32 SectionDurationFrames = (AudioSection->GetExclusiveEndFrame() - AudioSection->GetInclusiveStartFrame()).Value;
-	const float SectionDurationSeconds = SectionDurationFrames / TickResolution.AsDecimal();
-
-	// Calculate the effective end time within the audio asset
-	const float AudioEndSeconds = AudioStartOffsetSeconds + SectionDurationSeconds;
-
-	USoundWave* SoundWave = Cast<USoundWave>(AudioSection->GetSound());
-	if (!ensureMsgf(SoundWave, TEXT("ASSERT: [%i] %hs:\n'SoundWave' is not valid!"), __LINE__, __FUNCTION__))
+	const FFrameRate TickResolution = GetTickResolution(AudioSection);
+	if (!ensureMsgf(TickResolution.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TickResolution' is not valid!"), __LINE__, __FUNCTION__))
 	{
 		return FLSATTrimTimes::Invalid;
 	}
 
 	FLSATTrimTimes TrimTimes;
-	TrimTimes.SoundTrimStartMs = static_cast<int32>(AudioStartOffsetSeconds * 1000.0f);
-	TrimTimes.SoundTrimEndMs = static_cast<int32>(AudioEndSeconds * 1000.0f);
-	TrimTimes.SoundWave = SoundWave;
+	TrimTimes.SoundWave = Cast<USoundWave>(AudioSection->GetSound());
+	if (!ensureMsgf(TrimTimes.SoundWave, TEXT("ASSERT: [%i] %hs:\n'SoundWave' is not valid!"), __LINE__, __FUNCTION__)
+		|| !ensureMsgf(TrimTimes.GetSoundTotalDurationMs() > 0.f, TEXT("ASSERT: [%i] %hs:\nDuration of '%s' sound is not valid!"), __LINE__, __FUNCTION__, *GetNameSafe(TrimTimes.SoundWave)))
+	{
+		return FLSATTrimTimes::Invalid;
+	}
 
-	// Log the start and end times in milliseconds, section duration, and percentage used
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Audio: %s, Used from %.2f seconds to %.2f seconds (Duration: %.2f seconds), Percentage Used: %.2f%%"),
-	       *SoundWave->GetName(), AudioStartOffsetSeconds, AudioEndSeconds, AudioEndSeconds - AudioStartOffsetSeconds,
-	       ((AudioEndSeconds - AudioStartOffsetSeconds) / SoundWave->Duration) * 100.0f);
+	// Get the audio start offset in frames (relative to the audio asset)
+	TrimTimes.SoundTrimStartMs = ConvertFrameToMs(AudioSection->GetStartOffset(), TickResolution);
 
+	// Calculate the effective end time within the audio asset
+	const int32 SectionStartFrame = GetSectionInclusiveStartTimeMs(AudioSection);
+	const int32 SectionEndMs = GetSectionExclusiveEndTimeMs(AudioSection);
+	const int32 SectionDurationMs = SectionEndMs - SectionStartFrame;
+	TrimTimes.SoundTrimEndMs = TrimTimes.SoundTrimStartMs + SectionDurationMs;
+
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%s"), *TrimTimes.ToString(TickResolution));
 	return TrimTimes;
 }
 
 // Splits the looping segments in the given trim times into multiple sections
 void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectionsContainer, UMovieSceneAudioSection* InAudioSection, const FLSATTrimTimes& TrimTimes)
 {
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting looping sections for %s"), *TrimTimes.ToString());
-	if (!ensureMsgf(TrimTimes.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TrimTimes' is not valid | %s"), __LINE__, __FUNCTION__, *TrimTimes.ToString())
-		|| !ensureMsgf(InAudioSection, TEXT("ASSERT: [%i] %hs:\n'InAudioSection' is null!"), __LINE__, __FUNCTION__))
+	const FFrameRate TickResolution = GetTickResolution(InAudioSection);
+	if (!ensureMsgf(TickResolution.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TickResolution' is not valid!"), __LINE__, __FUNCTION__))
 	{
-		UE_LOG(LogAudioTrimmer, Error, TEXT("Invalid TrimTimes: %s"), *TrimTimes.ToString());
 		return;
 	}
 
-	const ULevelSequence* LevelSequence = InAudioSection->GetTypedOuter<ULevelSequence>();
-	checkf(LevelSequence, TEXT("ERROR: [%i] %hs:\n'LevelSequence' is null!"), __LINE__, __FUNCTION__);
-	const FFrameRate TickResolution = LevelSequence->GetMovieScene()->GetTickResolution();
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting looping sections for %s"), *TrimTimes.ToString(TickResolution));
+
+	if (!ensureMsgf(TrimTimes.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TrimTimes' is not valid"), __LINE__, __FUNCTION__)
+		|| !ensureMsgf(InAudioSection, TEXT("ASSERT: [%i] %hs:\n'InAudioSection' is null!"), __LINE__, __FUNCTION__))
+	{
+		return;
+	}
+
 	const int32 TotalSoundDurationMs = TrimTimes.GetSoundTotalDurationMs();
-	const int32 SectionStartMs = TrimTimes.GetSectionInclusiveStartTimeMs(InAudioSection);
-	const int32 SectionEndMs = TrimTimes.GetSectionExclusiveEndTimeMs(InAudioSection);
+	const int32 SectionStartMs = GetSectionInclusiveStartTimeMs(InAudioSection);
+	const int32 SectionEndMs = GetSectionExclusiveEndTimeMs(InAudioSection);
 
 	OutNewSectionsContainer.Add(InAudioSection);
 
@@ -850,4 +841,71 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 	}
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting complete, split into %d new sections."), OutNewSectionsContainer.Num());
+}
+
+// Returns the actual start time of the audio section in the level Sequence in milliseconds
+int32 ULSATUtilsLibrary::GetSectionInclusiveStartTimeMs(const UMovieSceneSection* InSection)
+{
+	const FFrameRate TickResolution = GetTickResolution(InSection);
+	if (!TickResolution.IsValid())
+	{
+		return INDEX_NONE;
+	}
+
+	const FFrameNumber SectionStartFrame = InSection->GetInclusiveStartFrame();
+	return ConvertFrameToMs(SectionStartFrame, TickResolution);
+}
+
+// Returns the actual end time of the audio section in the level Sequence in milliseconds
+int32 ULSATUtilsLibrary::GetSectionExclusiveEndTimeMs(const UMovieSceneSection* InSection)
+{
+	const FFrameRate TickResolution = GetTickResolution(InSection);
+	if (!TickResolution.IsValid())
+	{
+		return INDEX_NONE;
+	}
+
+	const FFrameNumber SectionEndFrame = InSection->GetExclusiveEndFrame();
+	return ConvertFrameToMs(SectionEndFrame, TickResolution);
+}
+
+// Converts seconds to frames based on the frame rate, or -1 if cannot convert
+int32 ULSATUtilsLibrary::ConvertMsToFrame(int32 InMilliseconds, const FFrameRate& TickResolution)
+{
+	// Convert time in seconds to frame time based on tick resolution
+	const float InSec = static_cast<float>(InMilliseconds) / 1000.f;
+	const float FrameNumber = static_cast<float>(TickResolution.AsFrameTime(InSec).GetFrame().Value);
+	const float Frame = FrameNumber / 1000.f;
+
+	return FrameNumber >= 0.f ? FMath::RoundToInt(Frame) : INDEX_NONE;
+}
+
+// Converts frames to milliseconds based on the frame rate, or -1 if cannot convert
+int32 ULSATUtilsLibrary::ConvertFrameToMs(const FFrameNumber& InFrame, const FFrameRate& TickResolution)
+{
+	if (!TickResolution.IsValid())
+	{
+		return INDEX_NONE;
+	}
+
+	const double InSec = TickResolution.AsSeconds(InFrame);
+	const double InMs = InSec * 1000.0;
+	return FMath::RoundToInt(InMs);
+}
+
+// Returns the tick resolution of the level sequence
+FFrameRate ULSATUtilsLibrary::GetTickResolution(const UMovieSceneSection* InSection)
+{
+	FFrameRate TickResolution(0, 0);
+	if (const ULevelSequence* InLevelSequence = GetLevelSequence(InSection))
+	{
+		TickResolution = InLevelSequence->GetMovieScene()->GetTickResolution();
+	}
+	return TickResolution;
+}
+
+// Returns the Level Sequence of the given section
+ULevelSequence* ULSATUtilsLibrary::GetLevelSequence(const UMovieSceneSection* InSection)
+{
+	return InSection ? InSection->GetTypedOuter<ULevelSequence>() : nullptr;
 }
