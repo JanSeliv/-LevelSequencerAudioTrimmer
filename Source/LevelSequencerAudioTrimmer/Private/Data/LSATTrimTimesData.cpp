@@ -157,12 +157,11 @@ bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
  * FLSATTrimTimesMap
  ********************************************************************************************* */
 
-// Returns the first level sequence from the audio sections container
-class ULevelSequence* FLSATTrimTimesMap::GetFirstLevelSequence() const
+// Returns first audio section from the audio sections container
+UMovieSceneAudioSection* FLSATTrimTimesMap::GetFirstAudioSection() const
 {
-	const TArray<TObjectPtr<UMovieSceneAudioSection>>* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value.AudioSections : nullptr;
-	const UMovieSceneAudioSection* Section = Sections && !Sections->IsEmpty() ? (*Sections)[0] : nullptr;
-	return ULSATUtilsLibrary::GetLevelSequence(Section);
+	const FLSATSectionsContainer* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value : nullptr;
+	return Sections && !Sections->IsEmpty() ? Sections->AudioSections[0] : nullptr;
 }
 
 // Sets the sound wave for all trim times in this map

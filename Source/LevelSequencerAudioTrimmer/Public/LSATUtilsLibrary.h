@@ -60,19 +60,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
 	static void HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
 
+	/** Handles the reuse and fragmentation of sound segments within a level sequence.
+	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it according to the segment reuse policy. */
+	static void HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+
 	/*********************************************************************************************
 	 * Main Flow
 	 * Is called after the preprocessing for each found audio.
 	 ********************************************************************************************* */
 public:
-	/** Duplicates the given SoundWave asset, incrementing an index to its name.
-	 * Useful for handling multiple instances of the same audio with different trim times.
-	 * @param OriginalSoundWave The original SoundWave asset to duplicate.
-	 * @param DuplicateIndex The index to append to the duplicated asset's name.
-	 * @return Duplicated Sound Wave asset in the same directory as the original asset. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
-	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex = 1);
-
 	/** Exports a sound wave to a WAV file.
 	 * @param SoundWave The sound wave to export.
 	 * @return The file path to the exported WAV file. */
@@ -110,6 +106,14 @@ public:
 	 * Helpers
 	 ********************************************************************************************* */
 public:
+	/** Duplicates the given SoundWave asset, incrementing an index to its name.
+	 * Useful for handling multiple instances of the same audio with different trim times.
+	 * @param OriginalSoundWave The original SoundWave asset to duplicate.
+	 * @param DuplicateIndex The index to append to the duplicated asset's name.
+	 * @return Duplicated Sound Wave asset in the same directory as the original asset. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
+	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex = 1);
+
 	/** Retrieves all audio sections from the given level sequence.
 	 * @param OutMap Returns a map of sound waves to their corresponding audio sections, where the same sound wave can be used in multiple audio sections.
 	 * @param InLevelSequence The level sequence to search for audio sections. */
@@ -165,4 +169,9 @@ public:
 	/** Returns the Level Sequence of the given section. */
 	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
 	static class ULevelSequence* GetLevelSequence(const UMovieSceneSection* InSection);
+
+	/** Splits the given trim times into smaller, non-overlapping parts that can be reused.
+	 * @param InOutTrimTimes Takes the trim times and modifies them to be non-overlapping and reusable.
+	 * @param SoundWave The sound wave asset to split the trim times for. */
+	static void GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrimTimes, USoundWave* SoundWave);
 };

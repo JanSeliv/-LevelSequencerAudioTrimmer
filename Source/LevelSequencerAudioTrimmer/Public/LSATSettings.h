@@ -40,4 +40,9 @@ public:
 	/** Policy for handling the audio tracks with different trim times for the same sound wave. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
 	ELSATPolicyDifferentTrimTimes PolicyDifferentTrimTimes;
+
+	/** Defines policies for handling the reuse and fragmentation of sound segments within a level sequence.
+	 * This policy control how overlapping sound usage is processed when trimming and reimporting sound assets. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming|Policy")
+	ELSATPolicySegmentsReuse PolicySegmentsReuse;
 };

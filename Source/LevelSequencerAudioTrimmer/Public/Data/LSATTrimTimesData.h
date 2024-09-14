@@ -136,8 +136,8 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
 	TMap<FLSATTrimTimes, FLSATSectionsContainer> TrimTimesMap;
 
-	/** Returns the first level sequence from the audio sections container. */
-	class ULevelSequence* GetFirstLevelSequence() const;
+	/** Returns first audio section from the audio sections container. */
+	UMovieSceneAudioSection* GetFirstAudioSection() const;
 
 	/** Sets the sound wave for all trim times and audio sections in this map. */
 	void SetSound(USoundWave* SoundWave);

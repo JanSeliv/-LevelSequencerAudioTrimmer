@@ -34,6 +34,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
 	 * 3. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
 	 * 4. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
+	 * 5. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
@@ -50,6 +51,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
 		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
 		HandlePolicySoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
+		HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
 	}
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), TrimTimesMultiMap.Num());
@@ -78,12 +80,11 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 *			  |-- AudioSection4 -> Trim and reimport directly to SW_Step
 	 *
 	 * [Main Flow] - Is called after the preprocessing for each found audio:
-	 * 1. DuplicateSoundWave ➔ Optional, duplicates sound wave asset if needed.
-	 * 2. ExportSoundWaveToWav ➔ Convert sound wave into a WAV file.
-	 * 3. TrimAudio ➔ Apply trimming to the WAV file.
-	 * 4. ReimportAudioToUnreal ➔ Load the trimmed WAV file back into the engine.
-	 * 5. ResetTrimmedAudioSection ➔ Update audio section with the new sound.
-	 * 6. DeleteTempWavFile ➔ Remove the temporary WAV file.
+	 * 1. ExportSoundWaveToWav ➔ Convert sound wave into a WAV file.
+	 * 2. TrimAudio ➔ Apply trimming to the WAV file.
+	 * 3. ReimportAudioToUnreal ➔ Load the trimmed WAV file back into the engine.
+	 * 4. ResetTrimmedAudioSection ➔ Update audio section with the new sound.
+	 * 5. DeleteTempWavFile ➔ Remove the temporary WAV file.
 	 ******************************************************************************************* */
 
 	const ELSATPolicyDifferentTrimTimes PolicyDifferentTrimTimes = ULSATSettings::Get().PolicyDifferentTrimTimes;
@@ -229,7 +230,7 @@ void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InO
 		}
 
 		// Get first level sequence where the sound wave is used as iterator from the map
-		const ULevelSequence* OriginalLevelSequence = ItRef.Value.GetFirstLevelSequence();
+		const ULevelSequence* OriginalLevelSequence = GetLevelSequence(ItRef.Value.GetFirstAudioSection());
 		if (!OriginalLevelSequence)
 		{
 			continue;
@@ -464,46 +465,82 @@ void ULSATUtilsLibrary::HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMa
 	}
 }
 
+// Handles the reuse and fragmentation of sound segments within a level sequence
+void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+{
+	switch (ULSATSettings::Get().PolicySegmentsReuse)
+	{
+	case ELSATPolicySegmentsReuse::KeepOriginal:
+		// Segments will not be fragmented and reused, but kept as original
+		break;
+
+	case ELSATPolicySegmentsReuse::SplitToSmaller:
+		/** Segments will be fragmented into smaller reusable parts, with each usage sharing overlapping segments.
+		 * 
+		 * [BEFORE]
+		 * 
+		 * |=======|=============|=======|
+		 *     ^         ^           ^
+		 *   [4-5]     [0-5]       [0-1]
+		 *
+		 * |-- [4-5]
+		 * |    |-- AudioSection0
+		 * |
+		 * |-- [0-5]
+		 * |    |-- AudioSection1
+		 * |
+		 * |-- [0-1]
+		 * |    |-- AudioSection2
+		 * 
+		 * [AFTER]
+		 * 
+		 * |=======|=======|=======|=======|=======|
+		 *     ^       ^       ^       ^       ^
+		 *   [4-5]   [0-1]   [1-4]   [4-5]   [0-1]
+		 *
+		 *   |-- [4-5] -> Reused in two sections
+		 *   |    |-- AudioSection0
+		 *   |    |-- AudioSection1
+		 *   |
+		 *   |-- [0-1] -> Reused in two sections
+		 *   |    |-- AudioSection2
+		 *   |    |-- AudioSection3
+		 *   |
+		 *   |-- [2-3] -> New segment from middle of [0-5]
+		 *   |    |-- AudioSection4
+		 * 
+		 * In the [AFTER] visualization, the original segment [0-5] has been split into smaller parts: [0-1], [1-4], and [4-5].
+		 * Reused parts, such as [4-5] and [0-1], now have multiple audio sections referencing them, while the middle part [1-4] has been newly created.
+		 */
+		{
+			// Collect all unique split points (start and end times) from all trim times for each sound wave
+			for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& SoundWaveEntry : InOutTrimTimesMultiMap)
+			{
+				USoundWave* SoundWave = SoundWaveEntry.Key;
+
+				// Split the trim times into smaller, non-overlapping parts that can be reused
+				TArray<FLSATTrimTimes> FragmentedTrimTimes;
+				SoundWaveEntry.Value.TrimTimesMap.GenerateKeyArray(FragmentedTrimTimes);
+				GetFragmentedTrimTimes(/*InOut*/FragmentedTrimTimes, SoundWave);
+
+				// Log
+				const FFrameRate TickResolution = GetTickResolution(SoundWaveEntry.Value.GetFirstAudioSection());
+				for (const FLSATTrimTimes& It : FragmentedTrimTimes)
+				{
+					UE_LOG(LogAudioTrimmer, Log, TEXT("Created new TrimTimes: [%d ms (%d frames) - %d ms (%d frames)]"),
+					       It.SoundTrimStartMs, It.GetSoundTrimStartFrame(TickResolution), It.SoundTrimEndMs, It.GetSoundTrimEndFrame(TickResolution));
+				}
+
+				// @TODO JanSeliv finish logic: split audio sections to smaller based on FragmentedTrimTimes
+			}
+		}
+		break;
+	}
+}
+
 /*********************************************************************************************
  * Main Flow
  ********************************************************************************************* */
-
-// Duplicates the given SoundWave asset, incrementing an index to its name
-USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex/* = 1*/)
-{
-	checkf(OriginalSoundWave, TEXT("ERROR: [%i] %hs:\n'OriginalSoundWave' is null!"), __LINE__, __FUNCTION__);
-
-	// Generate a new name with incremented index (e.g. SoundWave -> SoundWave1 or SoundWave1 -> SoundWave2)
-	const FString NewObjectName = [&]()-> FString
-	{
-		const FString& Name = OriginalSoundWave->GetName();
-		const int32 Index = Name.FindLastCharByPredicate([](TCHAR Char) { return !FChar::IsDigit(Char); });
-		const int32 NewIndex = (Index + 1 < Name.Len()) ? FCString::Atoi(*Name.Mid(Index + 1)) + DuplicateIndex : DuplicateIndex;
-		return FString::Printf(TEXT("%s%d"), *Name.Left(Index + 1), NewIndex);
-	}();
-
-	if (!ensureMsgf(OriginalSoundWave->GetName() != NewObjectName, TEXT("ASSERT: [%i] %hs:\n'NewObjectName' is the same as 'OriginalSoundWave' name!: %s"), __LINE__, __FUNCTION__, *NewObjectName))
-	{
-		return nullptr;
-	}
-
-	// Get the original package name and create a new package within the same directory
-	const FString OriginalPackagePath = FPackageName::GetLongPackagePath(OriginalSoundWave->GetOutermost()->GetName());
-	const FString NewPackageName = FString::Printf(TEXT("%s/%s"), *OriginalPackagePath, *NewObjectName);
-	UPackage* DuplicatedPackage = CreatePackage(*NewPackageName);
-
-	// Duplicate the sound wave
-	USoundWave* DuplicatedSoundWave = Cast<USoundWave>(StaticDuplicateObject(OriginalSoundWave, DuplicatedPackage, *NewObjectName));
-	checkf(DuplicatedSoundWave, TEXT("ERROR: [%i] %hs:\nFailed to duplicate SoundWave: %s"), __LINE__, __FUNCTION__, *OriginalSoundWave->GetName());
-
-	// Complete the duplication process
-	DuplicatedSoundWave->MarkPackageDirty();
-	FAssetRegistryModule::AssetCreated(DuplicatedSoundWave);
-
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Duplicated sound wave %s to %s"), *OriginalSoundWave->GetName(), *NewObjectName);
-
-	return DuplicatedSoundWave;
-}
 
 // Exports a sound wave to a WAV file
 FString ULSATUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
@@ -655,6 +692,43 @@ bool ULSATUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
 /*********************************************************************************************
  * Helpers
  ********************************************************************************************* */
+
+// Duplicates the given SoundWave asset, incrementing an index to its name
+USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex/* = 1*/)
+{
+	checkf(OriginalSoundWave, TEXT("ERROR: [%i] %hs:\n'OriginalSoundWave' is null!"), __LINE__, __FUNCTION__);
+
+	// Generate a new name with incremented index (e.g. SoundWave -> SoundWave1 or SoundWave1 -> SoundWave2)
+	const FString NewObjectName = [&]()-> FString
+	{
+		const FString& Name = OriginalSoundWave->GetName();
+		const int32 Index = Name.FindLastCharByPredicate([](TCHAR Char) { return !FChar::IsDigit(Char); });
+		const int32 NewIndex = (Index + 1 < Name.Len()) ? FCString::Atoi(*Name.Mid(Index + 1)) + DuplicateIndex : DuplicateIndex;
+		return FString::Printf(TEXT("%s%d"), *Name.Left(Index + 1), NewIndex);
+	}();
+
+	if (!ensureMsgf(OriginalSoundWave->GetName() != NewObjectName, TEXT("ASSERT: [%i] %hs:\n'NewObjectName' is the same as 'OriginalSoundWave' name!: %s"), __LINE__, __FUNCTION__, *NewObjectName))
+	{
+		return nullptr;
+	}
+
+	// Get the original package name and create a new package within the same directory
+	const FString OriginalPackagePath = FPackageName::GetLongPackagePath(OriginalSoundWave->GetOutermost()->GetName());
+	const FString NewPackageName = FString::Printf(TEXT("%s/%s"), *OriginalPackagePath, *NewObjectName);
+	UPackage* DuplicatedPackage = CreatePackage(*NewPackageName);
+
+	// Duplicate the sound wave
+	USoundWave* DuplicatedSoundWave = Cast<USoundWave>(StaticDuplicateObject(OriginalSoundWave, DuplicatedPackage, *NewObjectName));
+	checkf(DuplicatedSoundWave, TEXT("ERROR: [%i] %hs:\nFailed to duplicate SoundWave: %s"), __LINE__, __FUNCTION__, *OriginalSoundWave->GetName());
+
+	// Complete the duplication process
+	DuplicatedSoundWave->MarkPackageDirty();
+	FAssetRegistryModule::AssetCreated(DuplicatedSoundWave);
+
+	UE_LOG(LogAudioTrimmer, Log, TEXT("Duplicated sound wave %s to %s"), *OriginalSoundWave->GetName(), *NewObjectName);
+
+	return DuplicatedSoundWave;
+}
 
 // Retrieves all audio sections from the given level sequence
 void ULSATUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, FLSATSectionsContainer>& OutMap, const ULevelSequence* InLevelSequence)
@@ -908,4 +982,47 @@ FFrameRate ULSATUtilsLibrary::GetTickResolution(const UMovieSceneSection* InSect
 ULevelSequence* ULSATUtilsLibrary::GetLevelSequence(const UMovieSceneSection* InSection)
 {
 	return InSection ? InSection->GetTypedOuter<ULevelSequence>() : nullptr;
+}
+
+// Splits the given trim times into smaller, non-overlapping parts that can be reused
+void ULSATUtilsLibrary::GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrimTimes, USoundWave* SoundWave)
+{
+	TArray<FLSATTrimTimes> NewTrimTimesArray;
+
+	// Collect all start and end times as split points
+	TSet<int32> SplitPointsMs;
+	for (const FLSATTrimTimes& It : InOutTrimTimes)
+	{
+		SplitPointsMs.Add(It.SoundTrimStartMs);
+		SplitPointsMs.Add(It.SoundTrimEndMs);
+	}
+
+	// Convert the split points to a sorted array
+	TArray<int32> SortedSplitPointsMs = SplitPointsMs.Array();
+	SortedSplitPointsMs.Sort();
+
+	// Create new trim times based on the split points
+	const int32 MinDurationMs = ULSATSettings::Get().MinDifferenceMs;
+
+	for (int32 i = 0; i < SortedSplitPointsMs.Num() - 1; ++i)
+	{
+		const int32 StartMs = SortedSplitPointsMs[i];
+		const int32 EndMs = SortedSplitPointsMs[i + 1];
+
+		const int32 SegmentDurationMs = EndMs - StartMs;
+
+		if (SegmentDurationMs < MinDurationMs)
+		{
+			continue; // Skip segments shorter than MinDifferenceMs
+		}
+
+		FLSATTrimTimes NewTrimTimes;
+		NewTrimTimes.SoundTrimStartMs = StartMs;
+		NewTrimTimes.SoundTrimEndMs = EndMs;
+		NewTrimTimes.SoundWave = SoundWave;
+
+		NewTrimTimesArray.Add(NewTrimTimes);
+	}
+
+	InOutTrimTimes = NewTrimTimesArray;
 }

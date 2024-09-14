@@ -28,7 +28,6 @@ enum class ELSATPolicySoundsOutsideSequences : uint8
 {
 	///< This sound wave will not be processed at all if it's used anywhere outside level sequences.
 	SkipAll,
-
 	///< Sound wave used outside level sequences will not be touched, but those that used in level sequences will be duplicated.
 	SkipAndDuplicate,
 };
@@ -43,4 +42,17 @@ enum class ELSATPolicyDifferentTrimTimes : uint8
 	SkipAll,
 	///< Duplicate sound wave asset for different trim times, but reimport only one of them.
 	ReimportOneAndDuplicateOthers,
+};
+
+/**
+* Defines policies for handling the reuse and fragmentation of sound segments within a level sequence.
+* This policy control how overlapping sound usage is processed when trimming and reimporting sound assets.
+*/
+UENUM(BlueprintType)
+enum class ELSATPolicySegmentsReuse : uint8
+{
+	///< Segments will not be fragmented and reused, but kept as original.
+	KeepOriginal,
+	///< Segments will be fragmented into smaller reusable parts, with each usage sharing overlapping segments.
+	SplitToSmaller
 };
