@@ -365,37 +365,18 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 		{
 			FLSATTrimTimesMap& TrimTimesMapRef = InOutTrimTimesMultiMap.FindOrAdd(LoopingSound);
 
-			TArray<FLSATTrimTimes> TrimTimesToRemove;
-			FLSATSectionsContainer AllNewSections;
-
-			for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& It : TrimTimesMapRef)
+			TrimTimesMapRef.RebuildTrimTimesMapWithProcessor([](UMovieSceneAudioSection* AudioSection, const FLSATTrimTimes& TrimTimes, FLSATSectionsContainer& OutAllNewSections)
 			{
-				const FLSATTrimTimes& TrimTimes = It.Key;
-
-				if (!TrimTimes.IsValid()
-					|| !TrimTimes.IsLooping())
+				if (!TrimTimes.IsLooping())
 				{
-					continue;
+					return;
 				}
 
-				for (UMovieSceneAudioSection* SectionIt : It.Value)
-				{
-					FLSATSectionsContainer SplitSections;
-					SplitLoopingSection(/*out*/SplitSections, SectionIt, TrimTimes);
+				FLSATSectionsContainer SplitSections;
+				SplitLoopingSection(/*out*/SplitSections, AudioSection, TrimTimes);
 
-					AllNewSections.Append(SplitSections);
-					TrimTimesToRemove.AddUnique(TrimTimes);
-				}
-			}
-
-			// Remove original looping TrimTimes from the map
-			for (const FLSATTrimTimes& TrimTimesToRemoveEntry : TrimTimesToRemove)
-			{
-				TrimTimesMapRef.Remove(TrimTimesToRemoveEntry);
-			}
-
-			// Recalculate trim times for the new sections and merge them back into the map
-			CalculateTrimTimesInAllSections(TrimTimesMapRef, AllNewSections);
+				OutAllNewSections.Append(SplitSections);
+			});
 		}
 		break;
 
@@ -512,27 +493,31 @@ void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutT
 		 * In the [AFTER] visualization, the original segment [0-5] has been split into smaller parts: [0-1], [1-4], and [4-5].
 		 * Reused parts, such as [4-5] and [0-1], now have multiple audio sections referencing them, while the middle part [1-4] has been newly created.
 		 */
+		for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& SoundWaveEntry : InOutTrimTimesMultiMap)
 		{
-			// Collect all unique split points (start and end times) from all trim times for each sound wave
-			for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& SoundWaveEntry : InOutTrimTimesMultiMap)
+			USoundWave* SoundWave = SoundWaveEntry.Key;
+			FLSATTrimTimesMap& TrimTimesMapRef = SoundWaveEntry.Value;
+
+			// Generate fragmented TrimTimesArray based on the sound wave
+			TArray<FLSATTrimTimes> TrimTimesArray;
+			TrimTimesMapRef.TrimTimesMap.GenerateKeyArray(TrimTimesArray);
+			GetFragmentedTrimTimes(TrimTimesArray, SoundWave);
+
+			// Log the newly created TrimTimes
+			const FFrameRate TickResolution = GetTickResolution(TrimTimesMapRef.GetFirstAudioSection());
+			for (const FLSATTrimTimes& It : TrimTimesArray)
 			{
-				USoundWave* SoundWave = SoundWaveEntry.Key;
-
-				// Split the trim times into smaller, non-overlapping parts that can be reused
-				TArray<FLSATTrimTimes> FragmentedTrimTimes;
-				SoundWaveEntry.Value.TrimTimesMap.GenerateKeyArray(FragmentedTrimTimes);
-				GetFragmentedTrimTimes(/*InOut*/FragmentedTrimTimes, SoundWave);
-
-				// Log
-				const FFrameRate TickResolution = GetTickResolution(SoundWaveEntry.Value.GetFirstAudioSection());
-				for (const FLSATTrimTimes& It : FragmentedTrimTimes)
-				{
-					UE_LOG(LogAudioTrimmer, Log, TEXT("Created new TrimTimes: [%d ms (%d frames) - %d ms (%d frames)]"),
-					       It.SoundTrimStartMs, It.GetSoundTrimStartFrame(TickResolution), It.SoundTrimEndMs, It.GetSoundTrimEndFrame(TickResolution));
-				}
-
-				// @TODO JanSeliv finish logic: split audio sections to smaller based on FragmentedTrimTimes
+				UE_LOG(LogAudioTrimmer, Log, TEXT("Created new TrimTimes: [%d ms (%d frames) - %d ms (%d frames)]"),
+				       It.SoundTrimStartMs, It.GetSoundTrimStartFrame(TickResolution), It.SoundTrimEndMs, It.GetSoundTrimEndFrame(TickResolution));
 			}
+
+			// Replace the TrimTimesMap with the new fragmented TrimTimes
+			TrimTimesMapRef.RebuildTrimTimesMapWithProcessor([&](UMovieSceneAudioSection* AudioSection, const FLSATTrimTimes& TrimTimes, FLSATSectionsContainer& OutAllNewSections)
+			{
+				// @TODO JanSeliv finish logic: split audio sections to smaller based on FragmentedTrimTimes
+				// - In subfunction, For each fragmented TrimTime, check if AudioSection overlaps with TrimTimesArray, then create new sections for each overlap
+				// - in this body, if succeed, add it to OutAllNewSections
+			});
 		}
 		break;
 	}

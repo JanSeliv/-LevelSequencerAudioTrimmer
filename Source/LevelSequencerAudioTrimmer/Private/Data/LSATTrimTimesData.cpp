@@ -174,6 +174,50 @@ void FLSATTrimTimesMap::SetSound(USoundWave* SoundWave)
 	}
 }
 
+// Processes each audio section in this map and rebuilds the map if new sections are created
+void FLSATTrimTimesMap::RebuildTrimTimesMapWithProcessor(const FLSATSectionsProcessor& Processor)
+{
+	FLSATSectionsContainer AllNewSections;
+	TArray<FLSATTrimTimes> TrimTimesToRemove;
+
+	for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& TrimTimesEntry : TrimTimesMap)
+	{
+		const FLSATTrimTimes& TrimTimes = TrimTimesEntry.Key;
+
+		if (!TrimTimes.IsValid())
+		{
+			continue;
+		}
+
+		// Store the size of AllNewSections before processing
+		const int32 BeforeSize = AllNewSections.Num();
+
+		for (UMovieSceneAudioSection* AudioSection : TrimTimesEntry.Value)
+		{
+			Processor(AudioSection, TrimTimes, AllNewSections);
+		}
+
+		// If new sections were added, mark this TrimTimes for removal
+		if (AllNewSections.Num() > BeforeSize)
+		{
+			TrimTimesToRemove.AddUnique(TrimTimes);
+		}
+	}
+
+	// Only rebuild the map if new sections were added
+	if (!TrimTimesToRemove.IsEmpty())
+	{
+		// Remove the original TrimTimes that have been processed
+		for (const FLSATTrimTimes& TrimTimesToRemoveEntry : TrimTimesToRemove)
+		{
+			TrimTimesMap.Remove(TrimTimesToRemoveEntry);
+		}
+
+		// Recalculate and merge the new TrimTimes with their associated sections
+		ULSATUtilsLibrary::CalculateTrimTimesInAllSections(*this, AllNewSections);
+	}
+}
+
 bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
 {
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);

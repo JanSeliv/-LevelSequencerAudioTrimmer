@@ -124,6 +124,14 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
 	void Append(const FLSATSectionsContainer& Other) { AudioSections.Append(Other.AudioSections); }
 };
 
+/** Custom function to process each audio section in this map.
+ * The Processor should use OutAllNewSections to store new sections created during processing if any.
+ * @param AudioSection The audio section to be processed.
+ * @param TrimTimes The TrimTimes associated with the audio section.
+ * @param OutAllNewSections Used to collect new sections created by the Processor. */
+typedef TFunctionRef<void(UMovieSceneAudioSection* /*AudioSection*/, const FLSATTrimTimes& /*TrimTimes*/, FLSATSectionsContainer& /*OutAllNewSections*/)> FLSATSectionsProcessor;
+
+
 /**
  * Represents the map of trim times to the container of audio sections to trim.
  */
@@ -141,6 +149,12 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 
 	/** Sets the sound wave for all trim times and audio sections in this map. */
 	void SetSound(USoundWave* SoundWave);
+
+	/** Processes each audio section in this map and rebuilds the map if new sections are created.
+	 * The Processor is expected to create or split new sections and add new ones to Processor's OutAllNewSections.
+	 * Only entries with new sections will be removed and recalculated.
+	 * @param Processor The custom function to process each audio section. */
+	void RebuildTrimTimesMapWithProcessor(const FLSATSectionsProcessor& Processor);
 
 	auto begin() const { return TrimTimesMap.begin(); }
 	auto end() const { return TrimTimesMap.end(); }
