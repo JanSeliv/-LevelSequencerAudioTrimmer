@@ -114,6 +114,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
 	static USoundWave* DuplicateSoundWave(USoundWave* OriginalSoundWave, int32 DuplicateIndex = 1);
 
+	/** Duplicates the given audio section in the specified start and end frames.
+	 * @param OriginalAudioSection The original audio section to duplicate.
+	 * @param StartFrame The start frame to trim the audio section to.
+	 * @param EndFrame The end frame to trim the audio section to. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
+	static UMovieSceneAudioSection* DuplicateAudioSection(UMovieSceneAudioSection* OriginalAudioSection, FFrameNumber StartFrame, FFrameNumber EndFrame);
+
 	/** Retrieves all audio sections from the given level sequence.
 	 * @param OutMap Returns a map of sound waves to their corresponding audio sections, where the same sound wave can be used in multiple audio sections.
 	 * @param InLevelSequence The level sequence to search for audio sections. */
@@ -157,6 +164,7 @@ public:
 	/** Converts seconds to frames based on the frame rate, or -1 if cannot convert. */
 	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
 	static int32 ConvertMsToFrame(int32 InMilliseconds, const FFrameRate& TickResolution);
+	static FFrameNumber ConvertMsToFrameNumber(int32 InMilliseconds, const FFrameRate& TickResolution);
 
 	/** Converts frames to milliseconds based on the frame rate, or -1 if cannot convert. */
 	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
@@ -173,5 +181,6 @@ public:
 	/** Splits the given trim times into smaller, non-overlapping parts that can be reused.
 	 * @param InOutTrimTimes Takes the trim times and modifies them to be non-overlapping and reusable.
 	 * @param SoundWave The sound wave asset to split the trim times for. */
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
 	static void GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrimTimes, USoundWave* SoundWave);
 };

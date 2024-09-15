@@ -715,6 +715,34 @@ USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave,
 	return DuplicatedSoundWave;
 }
 
+// Duplicates the given audio section in the specified start and end frames
+UMovieSceneAudioSection* ULSATUtilsLibrary::DuplicateAudioSection(UMovieSceneAudioSection* OriginalAudioSection, FFrameNumber StartFrame, FFrameNumber EndFrame)
+{
+	if (!ensureMsgf(OriginalAudioSection, TEXT("ASSERT: [%i] %hs:\n'OriginalAudioSection' is not valid!"), __LINE__, __FUNCTION__)
+		|| !ensureMsgf(StartFrame < EndFrame, TEXT("ASSERT: [%i] %hs:\n'StartFrame' %d is not less than 'EndFrame' %d!"), __LINE__, __FUNCTION__, StartFrame.Value, EndFrame.Value))
+	{
+		return nullptr;
+	}
+
+	// Duplicate the original audio section
+	UMovieSceneTrack* Track = CastChecked<UMovieSceneTrack>(OriginalAudioSection->GetOuter());
+	UMovieSceneAudioSection* DuplicatedSection = DuplicateObject<UMovieSceneAudioSection>(OriginalAudioSection, Track);
+	if (!DuplicatedSection)
+	{
+		UE_LOG(LogAudioTrimmer, Error, TEXT("Failed to duplicate audio section: %s"), *OriginalAudioSection->GetName());
+		return nullptr;
+	}
+
+	// Add the duplicated section to the track
+	Track->AddSection(*DuplicatedSection);
+
+	// Set the range for the duplicated section using the start and end frame numbers
+	const TRange<FFrameNumber> NewSectionRange(StartFrame, EndFrame);
+	DuplicatedSection->SetRange(NewSectionRange);
+
+	return DuplicatedSection;
+}
+
 // Retrieves all audio sections from the given level sequence
 void ULSATUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, FLSATSectionsContainer>& OutMap, const ULevelSequence* InLevelSequence)
 {
@@ -937,6 +965,11 @@ int32 ULSATUtilsLibrary::ConvertMsToFrame(int32 InMilliseconds, const FFrameRate
 	const float Frame = FrameNumber / 1000.f;
 
 	return FrameNumber >= 0.f ? FMath::RoundToInt(Frame) : INDEX_NONE;
+}
+
+FFrameNumber ULSATUtilsLibrary::ConvertMsToFrameNumber(int32 InMilliseconds, const FFrameRate& TickResolution)
+{
+	return ConvertMsToFrame(InMilliseconds, TickResolution) * 1000;
 }
 
 // Converts frames to milliseconds based on the frame rate, or -1 if cannot convert
