@@ -460,35 +460,35 @@ void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutT
 		 * 
 		 * [BEFORE]
 		 * 
-		 * |=======|=============|=======|
+		 * |===3===|=====4=======|===5===|
 		 *     ^         ^           ^
 		 *   [4-5]     [0-5]       [0-1]
 		 *
-		 * |-- [4-5]
-		 * |    |-- AudioSection0
+		 * |-- [4-5] - [167ms-208ms]
+		 * |    |-- AudioSection_3
 		 * |
-		 * |-- [0-5]
-		 * |    |-- AudioSection1
+		 * |-- [0-5] - [0ms-209ms]
+		 * |    |-- AudioSection_4
 		 * |
-		 * |-- [0-1]
-		 * |    |-- AudioSection2
+		 * |-- [0-1] - [0ms-41ms]
+		 * |    |-- AudioSection_5
 		 * 
 		 * [AFTER]
 		 * 
-		 * |=======|=======|=======|=======|=======|
+		 * |===0===|===1===|===2===|===6===|===7===|
 		 *     ^       ^       ^       ^       ^
 		 *   [4-5]   [0-1]   [1-4]   [4-5]   [0-1]
 		 *
-		 *   |-- [4-5] -> Reused in two sections
-		 *   |    |-- AudioSection0
-		 *   |    |-- AudioSection1
+		 *   |-- [4-5] - [167ms-208ms] -> Reused in two sections
+		 *   |    |-- AudioSection_0
+		 *   |    |-- AudioSection_6
 		 *   |
-		 *   |-- [0-1] -> Reused in two sections
-		 *   |    |-- AudioSection2
-		 *   |    |-- AudioSection3
+		 *   |-- [1-4] - [41ms-167ms] -> New segment from middle
+		 *   |    |-- AudioSection_2
 		 *   |
-		 *   |-- [2-3] -> New segment from middle of [0-5]
-		 *   |    |-- AudioSection4
+		 *   |-- [0-1] - [0ms-41ms] -> Reused in two sections 
+		 *   |    |-- AudioSection_1
+		 *   |    |-- AudioSection_7
 		 * 
 		 * In the [AFTER] visualization, the original segment [0-5] has been split into smaller parts: [0-1], [1-4], and [4-5].
 		 * Reused parts, such as [4-5] and [0-1], now have multiple audio sections referencing them, while the middle part [1-4] has been newly created.
@@ -514,12 +514,13 @@ void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutT
 			// Replace the TrimTimesMap with the new fragmented TrimTimes
 			TrimTimesMapRef.RebuildTrimTimesMapWithProcessor([&](UMovieSceneAudioSection* AudioSection, const FLSATTrimTimes& TrimTimes, FLSATSectionsContainer& OutAllNewSections)
 			{
-				// @TODO JanSeliv finish logic: split audio sections to smaller based on FragmentedTrimTimes
-				// - In subfunction, For each fragmented TrimTime, check if AudioSection overlaps with TrimTimesArray, then create new sections for each overlap
-				// - in this body, if succeed, add it to OutAllNewSections
+				CreateAudioSectionsByTrimTimes(AudioSection, TrimTimesArray, OutAllNewSections, TrimTimes);
 			});
 		}
 		break;
+
+	default:
+		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicySegmentsReuse value!"), __LINE__, __FUNCTION__);
 	}
 }
 
@@ -716,10 +717,10 @@ USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave,
 }
 
 // Duplicates the given audio section in the specified start and end frames
-UMovieSceneAudioSection* ULSATUtilsLibrary::DuplicateAudioSection(UMovieSceneAudioSection* OriginalAudioSection, FFrameNumber StartFrame, FFrameNumber EndFrame)
+UMovieSceneAudioSection* ULSATUtilsLibrary::DuplicateAudioSection(UMovieSceneAudioSection* OriginalAudioSection, FFrameNumber SectionStart, FFrameNumber SectionEnd, FFrameNumber SoundStartOffset)
 {
 	if (!ensureMsgf(OriginalAudioSection, TEXT("ASSERT: [%i] %hs:\n'OriginalAudioSection' is not valid!"), __LINE__, __FUNCTION__)
-		|| !ensureMsgf(StartFrame < EndFrame, TEXT("ASSERT: [%i] %hs:\n'StartFrame' %d is not less than 'EndFrame' %d!"), __LINE__, __FUNCTION__, StartFrame.Value, EndFrame.Value))
+		|| !ensureMsgf(SectionStart < SectionEnd, TEXT("ASSERT: [%i] %hs:\n'StartFrame' %d is not less than 'EndFrame' %d!"), __LINE__, __FUNCTION__, SectionStart.Value, SectionEnd.Value))
 	{
 		return nullptr;
 	}
@@ -737,8 +738,9 @@ UMovieSceneAudioSection* ULSATUtilsLibrary::DuplicateAudioSection(UMovieSceneAud
 	Track->AddSection(*DuplicatedSection);
 
 	// Set the range for the duplicated section using the start and end frame numbers
-	const TRange<FFrameNumber> NewSectionRange(StartFrame, EndFrame);
+	const TRange<FFrameNumber> NewSectionRange(SectionStart, SectionEnd);
 	DuplicatedSection->SetRange(NewSectionRange);
+	DuplicatedSection->SetStartOffset(SoundStartOffset);
 
 	return DuplicatedSection;
 }
@@ -1043,4 +1045,46 @@ void ULSATUtilsLibrary::GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrim
 	}
 
 	InOutTrimTimes = NewTrimTimesArray;
+}
+
+// Creates new audio sections by duplicating the original section based on the provided trim times, adjusting start and end times to fit within the valid range
+void ULSATUtilsLibrary::CreateAudioSectionsByTrimTimes(UMovieSceneAudioSection* OriginalAudioSection, const TArray<FLSATTrimTimes>& InTrimTimes, FLSATSectionsContainer& OutAllNewSections, const FLSATTrimTimes& InRange)
+{
+	const FFrameRate TickResolution = GetTickResolution(OriginalAudioSection);
+	if (!ensureMsgf(TickResolution.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TickResolution' is not valid!"), __LINE__, __FUNCTION__))
+	{
+		return;
+	}
+
+	bool bCreatedAnySection = false;
+	const int32 SectionStartMs = GetSectionInclusiveStartTimeMs(OriginalAudioSection);
+	UMovieSceneTrack* Track = CastChecked<UMovieSceneTrack>(OriginalAudioSection->GetOuter());
+
+	// Loop through each fragment in the range and adjust its timing relative to the sequence
+	for (const FLSATTrimTimes& NewTrimTime : InTrimTimes)
+	{
+		FLSATTrimTimes FragmentedTrimTimes;
+		FragmentedTrimTimes.SoundTrimStartMs = SectionStartMs + (NewTrimTime.SoundTrimStartMs - InRange.SoundTrimStartMs);
+		FragmentedTrimTimes.SoundTrimEndMs = SectionStartMs + (NewTrimTime.SoundTrimEndMs - InRange.SoundTrimStartMs);
+
+		if (FragmentedTrimTimes.IsWithinSectionBounds(OriginalAudioSection)
+			&& NewTrimTime.IsWithinTrimBounds(InRange))
+		{
+			const FFrameNumber SectionStartFrame = ConvertMsToFrameNumber(FragmentedTrimTimes.SoundTrimStartMs, TickResolution);
+			const FFrameNumber SectionEndFrame = ConvertMsToFrameNumber(FragmentedTrimTimes.SoundTrimEndMs, TickResolution);
+			const FFrameNumber SoundOffsetFrame = ConvertMsToFrameNumber(NewTrimTime.SoundTrimStartMs, TickResolution);
+
+			UMovieSceneAudioSection* NewSection = DuplicateAudioSection(OriginalAudioSection, SectionStartFrame, SectionEndFrame, SoundOffsetFrame);
+			checkf(NewSection, TEXT("ERROR: [%i] %hs:\n'NewSection' is null!"), __LINE__, __FUNCTION__);
+
+			OutAllNewSections.Add(NewSection);
+
+			bCreatedAnySection = true;
+		}
+	}
+
+	if (bCreatedAnySection)
+	{
+		Track->RemoveSection(*OriginalAudioSection);
+	}
 }

@@ -116,10 +116,11 @@ public:
 
 	/** Duplicates the given audio section in the specified start and end frames.
 	 * @param OriginalAudioSection The original audio section to duplicate.
-	 * @param StartFrame The start frame to trim the audio section to.
-	 * @param EndFrame The end frame to trim the audio section to. */
+	 * @param SectionStart The start frame to trim the audio section to.
+	 * @param SectionEnd The end frame to trim the audio section to.
+	 * @param SoundStartOffset The start frame offset of the sound wave. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Main Flow")
-	static UMovieSceneAudioSection* DuplicateAudioSection(UMovieSceneAudioSection* OriginalAudioSection, FFrameNumber StartFrame, FFrameNumber EndFrame);
+	static UMovieSceneAudioSection* DuplicateAudioSection(UMovieSceneAudioSection* OriginalAudioSection, FFrameNumber SectionStart, FFrameNumber SectionEnd, FFrameNumber SoundStartOffset);
 
 	/** Retrieves all audio sections from the given level sequence.
 	 * @param OutMap Returns a map of sound waves to their corresponding audio sections, where the same sound wave can be used in multiple audio sections.
@@ -183,4 +184,12 @@ public:
 	 * @param SoundWave The sound wave asset to split the trim times for. */
 	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
 	static void GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrimTimes, USoundWave* SoundWave);
+
+	/** Creates new audio sections by duplicating the original section based on the provided trim times, adjusting start and end times to fit within the valid range.
+	 * @param OriginalAudioSection The original audio section that will be duplicated and fragmented.
+	 * @param InTrimTimes The array of new trim times used to fragment the original section into smaller pieces.
+	 * @param OutAllNewSections The container that will store all newly created audio sections based on the trim times.
+	 * @param InRange The original trim times of the audio section to ensure all fragments stay within these bounds.*/
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
+	static void CreateAudioSectionsByTrimTimes(UMovieSceneAudioSection* OriginalAudioSection, const TArray<FLSATTrimTimes>& InTrimTimes, FLSATSectionsContainer& OutAllNewSections, const FLSATTrimTimes& InRange);
 };
