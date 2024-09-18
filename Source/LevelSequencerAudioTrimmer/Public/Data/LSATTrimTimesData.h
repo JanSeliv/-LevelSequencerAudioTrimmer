@@ -81,6 +81,12 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	/** Returns true if the start and end times are valid. */
 	bool IsValid() const;
 
+	/** Checks if the trim times are within the bounds of the given audio section. */
+	bool IsWithinSectionBounds(const class UMovieSceneAudioSection* AudioSection) const;
+
+	/** Checks if the trim times are within the original trim times.*/
+	bool IsWithinTrimBounds(const FLSATTrimTimes& OtherTrimTimes) const;
+
 	/** Returns the string representation of the trim times that might be useful for logging. */
 	FString ToString(const FFrameRate& TickResolution) const;
 

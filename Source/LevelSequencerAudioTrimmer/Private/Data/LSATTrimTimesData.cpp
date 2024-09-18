@@ -91,15 +91,31 @@ bool FLSATTrimTimes::IsValid() const
 		&& SoundWave != nullptr;
 }
 
+// Checks if the trim times are within the bounds of the given audio section
+bool FLSATTrimTimes::IsWithinSectionBounds(const UMovieSceneAudioSection* AudioSection) const
+{
+	const int32 SectionStartMs = ULSATUtilsLibrary::GetSectionInclusiveStartTimeMs(AudioSection);
+	const int32 SectionEndMs = ULSATUtilsLibrary::GetSectionExclusiveEndTimeMs(AudioSection);
+	return SoundTrimStartMs >= SectionStartMs
+		&& SoundTrimEndMs <= SectionEndMs;
+}
+
+// Checks if the trim times are within the original trim times
+bool FLSATTrimTimes::IsWithinTrimBounds(const FLSATTrimTimes& OtherTrimTimes) const
+{
+	return SoundTrimStartMs >= OtherTrimTimes.SoundTrimStartMs
+		&& SoundTrimEndMs <= OtherTrimTimes.SoundTrimEndMs;
+}
+
 // Returns the string representation of the trim times that might be useful for logging
 FString FLSATTrimTimes::ToString(const FFrameRate& TickResolution) const
 {
 	return FString::Printf(TEXT("Audio: %s "
-		"| Usage: %.2f sec (frame %d) to %.2f seconds (frame %d) "
+		"| Usage: %d ms (frame %d) to %d ms (frame %d) "
 		"| Duration: %.2f sec (%d frames) "
 		"| Percentage Used: %1.f%%"),
 	                       *SoundWave->GetName()
-	                       , GetSoundTrimStartSeconds(), GetSoundTrimStartFrame(TickResolution), GetSoundTrimEndSeconds(), GetSoundTrimEndFrame(TickResolution)
+	                       , SoundTrimStartMs, GetSoundTrimStartFrame(TickResolution), SoundTrimEndMs, GetSoundTrimEndFrame(TickResolution)
 	                       , GetSoundTrimEndSeconds() - GetSoundTrimStartSeconds(), GetUsagesFrames(TickResolution)
 	                       , GetUsagePercentage());
 }
