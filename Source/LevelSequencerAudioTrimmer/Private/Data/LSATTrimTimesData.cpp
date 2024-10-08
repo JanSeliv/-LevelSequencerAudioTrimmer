@@ -59,7 +59,9 @@ float FLSATTrimTimes::GetUsagePercentage() const
 		return 0.f;
 	}
 
-	return (GetUsageDurationMs() / static_cast<float>(GetSoundTotalDurationMs())) * 100.f;
+	const float InUsageDurationMs = static_cast<float>(GetUsageDurationMs());
+	const float InTotalDurationMs = static_cast<float>(GetSoundTotalDurationMs());
+	return (InUsageDurationMs / InTotalDurationMs) * 100.f;
 }
 
 // Returns the number of frames the sound wave asset is used

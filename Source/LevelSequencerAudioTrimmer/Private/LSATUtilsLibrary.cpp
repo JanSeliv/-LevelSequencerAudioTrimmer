@@ -20,7 +20,6 @@
 #include "Sound/SoundWave.h"
 #include "Tests/AutomationEditorCommon.h"
 #include "Tracks/MovieSceneAudioTrack.h"
-#include "UObject/SavePackage.h"
 //---
 #include UE_INLINE_GENERATED_CPP_BY_NAME(LSATUtilsLibrary)
 
@@ -32,9 +31,10 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 *********************************************************************************************
 	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
-	 * 3. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
-	 * 4. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
-	 * 5. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
+	 * 3. HandleTrackBoundaries ➔ Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
+	 * 4. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
+	 * 5. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
+	 * 6. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
@@ -49,6 +49,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		}
 
 		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
+		HandleTrackBoundaries(/*InOut*/TrimTimesMultiMap);
 		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
 		HandlePolicySoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
 		HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
@@ -259,6 +260,93 @@ void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InO
 			{
 				// Calculate and combine trim times for the other level sequences
 				CalculateTrimTimesInAllSections(ItRef.Value, *OtherSectionsPtr);
+			}
+		}
+	}
+}
+
+// Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence
+void ULSATUtilsLibrary::HandleTrackBoundaries(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+{
+	for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& SoundWaveEntry : InOutTrimTimesMultiMap)
+	{
+		FLSATTrimTimesMap& TrimTimesMapRef = SoundWaveEntry.Value;
+		for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& TrimTimesEntry : TrimTimesMapRef.TrimTimesMap)
+		{
+			FLSATTrimTimes& TrimTimes = TrimTimesEntry.Key;
+			FLSATSectionsContainer& SectionsContainer = TrimTimesEntry.Value;
+
+			for (UMovieSceneAudioSection* AudioSection : SectionsContainer)
+			{
+				if (!AudioSection)
+				{
+					continue;
+				}
+
+				const ULevelSequence* LevelSequence = GetLevelSequence(AudioSection);
+				if (!LevelSequence)
+				{
+					continue;
+				}
+
+				const FFrameRate TickResolution = GetTickResolution(AudioSection);
+				const FFrameNumber LevelSequenceStartFrame = LevelSequence->GetMovieScene()->GetPlaybackRange().GetLowerBoundValue();
+				const FFrameNumber LevelSequenceEndFrame = LevelSequence->GetMovieScene()->GetPlaybackRange().GetUpperBoundValue();
+				const int32 LevelSequenceStartMs = ConvertFrameToMs(LevelSequenceStartFrame, TickResolution);
+				const int32 LevelSequenceEndMs = ConvertFrameToMs(LevelSequenceEndFrame, TickResolution);
+
+				// Get the actual start and end times of the audio section in the level sequence
+				const int32 SectionStartMs = ConvertFrameToMs(AudioSection->GetInclusiveStartFrame(), TickResolution);
+				const int32 SectionEndMs = ConvertFrameToMs(AudioSection->GetExclusiveEndFrame(), TickResolution);
+
+				// Adjust trim times if they are outside the level sequence boundaries
+				bool bTrimmed = false;
+				int32 AdjustedTrimStartMs = TrimTimes.SoundTrimStartMs;
+				FFrameNumber NewStartFrame = AudioSection->GetInclusiveStartFrame();
+				FFrameNumber NewEndFrame = AudioSection->GetExclusiveEndFrame();
+
+				if (SectionStartMs < LevelSequenceStartMs)
+				{
+					// Adjust SoundTrimStartMs by considering the local offset of the sound within the level sequence boundary
+					const int32 ExcessDurationMs = LevelSequenceStartMs - SectionStartMs;
+					AdjustedTrimStartMs += ExcessDurationMs;
+					NewStartFrame = LevelSequenceStartFrame;
+					bTrimmed = true;
+				}
+
+				if (SectionEndMs > LevelSequenceEndMs)
+				{
+					NewEndFrame = LevelSequenceEndFrame;
+					bTrimmed = true;
+				}
+
+				if (!bTrimmed)
+				{
+					// The audio track is within the level sequence boundaries
+					continue;
+				}
+
+				constexpr bool bIsLeftTrim = true;
+				constexpr bool bDeleteKeys = false;
+
+				// Apply trimming to the left side of the section if it starts before the level sequence start frame
+				if (AudioSection->GetInclusiveStartFrame() < LevelSequenceStartFrame)
+				{
+					AudioSection->TrimSection(FQualifiedFrameTime(NewStartFrame, TickResolution), bIsLeftTrim, bDeleteKeys);
+					AudioSection->SetStartOffset(ConvertMsToFrameNumber(AdjustedTrimStartMs, TickResolution));
+					TrimTimes.SoundTrimStartMs = AdjustedTrimStartMs;
+					UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Trimmed left side of section '%s'"), __FUNCTION__, *AudioSection->GetName());
+				}
+
+				// Apply trimming to the right side of the section if it ends after the level sequence end frame
+				if (AudioSection->GetExclusiveEndFrame() > LevelSequenceEndFrame)
+				{
+					AudioSection->TrimSection(FQualifiedFrameTime(NewEndFrame, TickResolution), !bIsLeftTrim, bDeleteKeys);
+					UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Trimmed right side of section '%s'"), __FUNCTION__, *AudioSection->GetName());
+				}
+
+				UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Finished trim to boundaries the section '%s' | %s"), __FUNCTION__, *AudioSection->GetName(), *TrimTimes.ToString(TickResolution));
+				TrimTimes = CalculateTrimTimesInSection(AudioSection);
 			}
 		}
 	}
@@ -1075,7 +1163,10 @@ void ULSATUtilsLibrary::CreateAudioSectionsByTrimTimes(UMovieSceneAudioSection* 
 			const FFrameNumber SoundOffsetFrame = ConvertMsToFrameNumber(NewTrimTime.SoundTrimStartMs, TickResolution);
 
 			UMovieSceneAudioSection* NewSection = DuplicateAudioSection(OriginalAudioSection, SectionStartFrame, SectionEndFrame, SoundOffsetFrame);
-			checkf(NewSection, TEXT("ERROR: [%i] %hs:\n'NewSection' is null!"), __LINE__, __FUNCTION__);
+			if (!ensureMsgf(NewSection, TEXT("ASSERT: [%i] %hs:\n'NewSection' failed to duplicate | %s!"), __LINE__, __FUNCTION__, *NewTrimTime.ToString(TickResolution)))
+			{
+				continue;
+			}
 
 			OutAllNewSections.Add(NewSection);
 
