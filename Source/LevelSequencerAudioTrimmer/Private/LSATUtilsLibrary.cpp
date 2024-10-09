@@ -44,7 +44,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		HandleSoundsInRequestedLevelSequence(/*out*/TrimTimesMultiMap, LevelSequence);
 		if (TrimTimesMultiMap.IsEmpty())
 		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("No valid trim times found in the level sequence."));
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: No valid trim times found in the level sequence."), __FUNCTION__);
 			return;
 		}
 
@@ -55,7 +55,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves with valid trim times."), TrimTimesMultiMap.Num());
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Found %d unique sound waves with valid trim times."), __FUNCTION__, TrimTimesMultiMap.Num());
 
 	/*********************************************************************************************
 	 * Main Flow: Is called after the preprocessing for each found audio.
@@ -98,7 +98,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		if (InnerMap.Num() > 1
 			&& PolicyDifferentTrimTimes == ELSATPolicyDifferentTrimTimes::SkipAll)
 		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Skipping processing for sound wave %s due to different trim times."), *GetNameSafe(OriginalSoundWave));
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Skipping processing for sound wave %s due to different trim times."), __FUNCTION__, *GetNameSafe(OriginalSoundWave));
 			continue;
 		}
 
@@ -111,7 +111,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 
 			if (TrimTimes.IsSoundTrimmed())
 			{
-				UE_LOG(LogAudioTrimmer, Log, TEXT("Skipping export for audio %s as there is almost no difference between total duration and usage duration"), *GetNameSafe(TrimTimes.SoundWave));
+				UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Skipping export for audio %s as there is almost no difference between total duration and usage duration"), __FUNCTION__, *GetNameSafe(TrimTimes.SoundWave));
 				continue;
 			}
 
@@ -145,7 +145,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 				const FString ExportPath = ExportSoundWaveToWav(TrimmedSoundWave);
 				if (ExportPath.IsEmpty())
 				{
-					UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export %s"), *TrimmedSoundWave->GetName());
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Failed to export %s"), __FUNCTION__, *TrimmedSoundWave->GetName());
 					continue;
 				}
 
@@ -154,7 +154,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 				const bool bSuccessTrim = TrimAudio(TrimTimes, ExportPath, TrimmedAudioPath);
 				if (!bSuccessTrim)
 				{
-					UE_LOG(LogAudioTrimmer, Warning, TEXT("Trimming audio failed for %s"), *TrimmedSoundWave->GetName());
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Trimming audio failed for %s"), __FUNCTION__, *TrimmedSoundWave->GetName());
 					continue;
 				}
 
@@ -162,7 +162,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 				const bool bSuccessReimport = ReimportAudioToUnreal(TrimmedSoundWave, TrimmedAudioPath);
 				if (!bSuccessReimport)
 				{
-					UE_LOG(LogAudioTrimmer, Warning, TEXT("Reimporting trimmed audio failed for %s"), *TrimmedSoundWave->GetName());
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Reimporting trimmed audio failed for %s"), __FUNCTION__, *TrimmedSoundWave->GetName());
 					continue;
 				}
 
@@ -181,7 +181,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 		}
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Processing complete."));
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Processing complete."), __FUNCTION__);
 }
 
 /*********************************************************************************************
@@ -202,11 +202,11 @@ void ULSATUtilsLibrary::HandleSoundsInRequestedLevelSequence(FLSATTrimTimesMulti
 
 	if (MainAudioSectionsMap.IsEmpty())
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("No audio sections found in the level sequence."));
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: No audio sections found in the level sequence."), __FUNCTION__);
 		return;
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Found %d unique sound waves in the main sequence."), MainAudioSectionsMap.Num());
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Found %d unique sound waves in the main sequence."), __FUNCTION__, MainAudioSectionsMap.Num());
 
 	for (const TTuple<USoundWave*, FLSATSectionsContainer>& It : MainAudioSectionsMap)
 	{
@@ -250,7 +250,7 @@ void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InO
 				continue;
 			}
 
-			UE_LOG(LogAudioTrimmer, Log, TEXT("Found sound wave '%s' usage in other level sequence: %s, its sections will be processed as well"), *OriginalSoundWave->GetName(), *OtherLevelSequence->GetName());
+			UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Found sound wave '%s' usage in other level sequence: %s, its sections will be processed as well"), __FUNCTION__, *OriginalSoundWave->GetName(), *OtherLevelSequence->GetName());
 
 			// Retrieve audio sections for the sound wave in the other level sequence
 			TMap<USoundWave*, FLSATSectionsContainer> OtherAudioSectionsMap;
@@ -345,8 +345,8 @@ void ULSATUtilsLibrary::HandleTrackBoundaries(FLSATTrimTimesMultiMap& InOutTrimT
 					UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Trimmed right side of section '%s'"), __FUNCTION__, *AudioSection->GetName());
 				}
 
-				UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Finished trim to boundaries the section '%s' | %s"), __FUNCTION__, *AudioSection->GetName(), *TrimTimes.ToString(TickResolution));
 				TrimTimes = CalculateTrimTimesInSection(AudioSection);
+				UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Finished trim to boundaries the section '%s' | %s"), __FUNCTION__, *AudioSection->GetName(), *TrimTimes.ToString(TickResolution));
 			}
 		}
 	}
@@ -360,7 +360,7 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 	{
 		if (It.Key.IsLooping())
 		{
-			UE_LOG(LogAudioTrimmer, Log, TEXT("Found looping %s"), *It.Key.ToCompactString());
+			UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Found looping %s"), __FUNCTION__, *It.Key.ToCompactString());
 			return true;
 		}
 		return false;
@@ -375,7 +375,7 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 	{
 	case ELSATPolicyLoopingSounds::SkipAll:
 		// Looping sounds should not be processed at all for this and all other audio tracks that use the same sound wave
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Skip processing all looping sounds according to the looping policy"));
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Skip processing all looping sounds according to the looping policy"), __FUNCTION__);
 		InOutTrimTimesMultiMap.Remove(LoopingSounds);
 		break;
 
@@ -487,8 +487,8 @@ void ULSATUtilsLibrary::HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMa
 		const bool bHasExternalUsages = OutUsages.ContainsByPredicate([](const UObject* Usage) { return Usage && !Usage->IsA<ULevelSequence>(); });
 		if (bHasExternalUsages)
 		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Sound wave '%s' is used outside of level sequences by different assets (like in the world or blueprints)"
-				       ", `Sounds Outside Sequences` Policy will be applied"), *GetNameSafe(It.Key.SoundWave));
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Sound wave '%s' is used outside of level sequences by different assets (like in the world or blueprints)"
+				       ", `Sounds Outside Sequences` Policy will be applied"), __FUNCTION__, *GetNameSafe(It.Key.SoundWave));
 		}
 		return bHasExternalUsages;
 	});
@@ -595,8 +595,8 @@ void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutT
 			const FFrameRate TickResolution = GetTickResolution(TrimTimesMapRef.GetFirstAudioSection());
 			for (const FLSATTrimTimes& It : TrimTimesArray)
 			{
-				UE_LOG(LogAudioTrimmer, Log, TEXT("Created new TrimTimes: [%d ms (%d frames) - %d ms (%d frames)]"),
-				       It.SoundTrimStartMs, It.GetSoundTrimStartFrame(TickResolution), It.SoundTrimEndMs, It.GetSoundTrimEndFrame(TickResolution));
+				UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Created new TrimTimes: [%d ms (%d frames) - %d ms (%d frames)]"),
+				       __FUNCTION__, It.SoundTrimStartMs, It.GetSoundTrimStartFrame(TickResolution), It.SoundTrimEndMs, It.GetSoundTrimEndFrame(TickResolution));
 			}
 
 			// Replace the TrimTimesMap with the new fragmented TrimTimes
@@ -621,7 +621,7 @@ FString ULSATUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
 {
 	if (!SoundWave)
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid SoundWave asset."));
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Invalid SoundWave asset."), __FUNCTION__);
 		return FString();
 	}
 
@@ -646,11 +646,11 @@ FString ULSATUtilsLibrary::ExportSoundWaveToWav(USoundWave* SoundWave)
 
 	if (bSuccess)
 	{
-		UE_LOG(LogAudioTrimmer, Log, TEXT("Successfully exported SoundWave to: %s"), *ExportPath);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Successfully exported SoundWave to: %s"), __FUNCTION__, *ExportPath);
 		return ExportPath;
 	}
 
-	UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to export SoundWave to: %s"), *ExportPath);
+	UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Failed to export SoundWave to: %s"), __FUNCTION__, *ExportPath);
 	return FString();
 }
 
@@ -659,7 +659,7 @@ bool ULSATUtilsLibrary::TrimAudio(const FLSATTrimTimes& TrimTimes, const FString
 {
 	if (!TrimTimes.IsValid())
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid TrimTimes."));
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Invalid TrimTimes."), __FUNCTION__);
 		return false;
 	}
 
@@ -677,14 +677,14 @@ bool ULSATUtilsLibrary::TrimAudio(const FLSATTrimTimes& TrimTimes, const FString
 
 	if (ReturnCode != 0)
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("FFMPEG failed to trim audio. Error: %s"), *Errors);
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: FFMPEG failed to trim audio. Error: %s"), __FUNCTION__, *Errors);
 		return false;
 	}
 
 	const float PrevSizeMB = IFileManager::Get().FileSize(*InputPath) / (1024.f * 1024.f);
 	const float NewSizeMB = IFileManager::Get().FileSize(*OutputPath) / (1024.f * 1024.f);
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Trimmed audio stats: Previous Size: %.2f MB, New Size: %.2f MB"), PrevSizeMB, NewSizeMB);
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Trimmed audio stats: Previous Size: %.2f MB, New Size: %.2f MB"), __FUNCTION__, PrevSizeMB, NewSizeMB);
 
 	return true;
 }
@@ -694,13 +694,13 @@ bool ULSATUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundWave, con
 {
 	if (!OriginalSoundWave)
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Original SoundWave is null."));
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Original SoundWave is null."), __FUNCTION__);
 		return false;
 	}
 
 	if (!FPaths::FileExists(TrimmedAudioFilePath))
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Trimmed audio file does not exist: %s"), *TrimmedAudioFilePath);
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Trimmed audio file does not exist: %s"), __FUNCTION__, *TrimmedAudioFilePath);
 		return false;
 	}
 
@@ -713,11 +713,11 @@ bool ULSATUtilsLibrary::ReimportAudioToUnreal(USoundWave* OriginalSoundWave, con
 	const bool bReimportSuccess = FReimportManager::Instance()->Reimport(OriginalSoundWave, false, false);
 	if (!bReimportSuccess)
 	{
-		UE_LOG(LogAudioTrimmer, Error, TEXT("Failed to reimport asset: %s"), *OriginalSoundWave->GetName());
+		UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: Failed to reimport asset: %s"), __FUNCTION__, *OriginalSoundWave->GetName());
 		return false;
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Successfully reimported asset: %s with new source: %s"), *OriginalSoundWave->GetName(), *TrimmedAudioFilePath);
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Successfully reimported asset: %s with new source: %s"), __FUNCTION__, *OriginalSoundWave->GetName(), *TrimmedAudioFilePath);
 	return true;
 }
 
@@ -753,11 +753,11 @@ bool ULSATUtilsLibrary::DeleteTempWavFile(const FString& FilePath)
 	{
 		if (IFileManager::Get().Delete(*FilePath))
 		{
-			UE_LOG(LogAudioTrimmer, Log, TEXT("Successfully deleted temporary file: %s"), *FilePath);
+			UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Successfully deleted temporary file: %s"), __FUNCTION__, *FilePath);
 			return true;
 		}
 
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to delete temporary file: %s"), *FilePath);
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Failed to delete temporary file: %s"), __FUNCTION__, *FilePath);
 		return false;
 	}
 	return true; // File doesn't exist, so consider it successfully "deleted"
@@ -799,7 +799,7 @@ USoundWave* ULSATUtilsLibrary::DuplicateSoundWave(USoundWave* OriginalSoundWave,
 	DuplicatedSoundWave->MarkPackageDirty();
 	FAssetRegistryModule::AssetCreated(DuplicatedSoundWave);
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Duplicated sound wave %s to %s"), *OriginalSoundWave->GetName(), *NewObjectName);
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Duplicated sound wave %s to %s"), __FUNCTION__, *OriginalSoundWave->GetName(), *NewObjectName);
 
 	return DuplicatedSoundWave;
 }
@@ -818,7 +818,7 @@ UMovieSceneAudioSection* ULSATUtilsLibrary::DuplicateAudioSection(UMovieSceneAud
 	UMovieSceneAudioSection* DuplicatedSection = DuplicateObject<UMovieSceneAudioSection>(OriginalAudioSection, Track);
 	if (!DuplicatedSection)
 	{
-		UE_LOG(LogAudioTrimmer, Error, TEXT("Failed to duplicate audio section: %s"), *OriginalAudioSection->GetName());
+		UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: Failed to duplicate audio section: %s"), __FUNCTION__, *OriginalAudioSection->GetName());
 		return nullptr;
 	}
 
@@ -838,7 +838,7 @@ void ULSATUtilsLibrary::FindAudioSectionsInLevelSequence(TMap<USoundWave*, FLSAT
 {
 	if (!InLevelSequence)
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("Invalid LevelSequence."));
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Invalid LevelSequence."), __FUNCTION__);
 		return;
 	}
 
@@ -942,7 +942,7 @@ FLSATTrimTimes ULSATUtilsLibrary::CalculateTrimTimesInSection(UMovieSceneAudioSe
 	const int32 SectionDurationMs = SectionEndMs - SectionStartFrame;
 	TrimTimes.SoundTrimEndMs = TrimTimes.SoundTrimStartMs + SectionDurationMs;
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("%s"), *TrimTimes.ToString(TickResolution));
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: %s"), __FUNCTION__, *TrimTimes.ToString(TickResolution));
 	return TrimTimes;
 }
 
@@ -955,7 +955,7 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		return;
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting looping sections for %s"), *TrimTimes.ToString(TickResolution));
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Splitting looping sections for %s"), __FUNCTION__, *TrimTimes.ToString(TickResolution));
 
 	if (!ensureMsgf(TrimTimes.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TrimTimes' is not valid"), __LINE__, __FUNCTION__)
 		|| !ensureMsgf(InAudioSection, TEXT("ASSERT: [%i] %hs:\n'InAudioSection' is null!"), __LINE__, __FUNCTION__))
@@ -975,21 +975,21 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 	// Continue splitting until the end time is reached
 	while (CurrentStartTimeMs < SectionEndMs - SplitDurationMs)
 	{
-		UE_LOG(LogAudioTrimmer, Log, TEXT("CurrentStartTimeMs: %d, TrimTimes.SoundTrimEndMs: %d"), CurrentStartTimeMs, TrimTimes.SoundTrimEndMs);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: CurrentStartTimeMs: %d, TrimTimes.SoundTrimEndMs: %d"), __FUNCTION__, CurrentStartTimeMs, TrimTimes.SoundTrimEndMs);
 
 		// Calculate the next split end time
 		const int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + SplitDurationMs, SectionEndMs);
-		UE_LOG(LogAudioTrimmer, Log, TEXT("NextEndTimeMs: %d"), NextEndTimeMs);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: NextEndTimeMs: %d"), __FUNCTION__, NextEndTimeMs);
 
 		// Convert the current start time to frame time for splitting
 		const FFrameNumber SplitFrame = TickResolution.AsFrameNumber(NextEndTimeMs / 1000.f);
 		const FQualifiedFrameTime SplitTime(SplitFrame, TickResolution);
-		UE_LOG(LogAudioTrimmer, Log, TEXT("Attempting to split at time: %d ms, which is frame: %d"), CurrentStartTimeMs, SplitTime.Time.GetFrame().Value);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Attempting to split at time: %d ms, which is frame: %d"), __FUNCTION__, CurrentStartTimeMs, SplitTime.Time.GetFrame().Value);
 
 		// Check if the section contains the split time
 		if (!InAudioSection->GetRange().Contains(SplitTime.Time.GetFrame()))
 		{
-			UE_LOG(LogAudioTrimmer, Error, TEXT("Section '%s' does not contain the split time: %d. Exiting."), *InAudioSection->GetName(), SplitTime.Time.GetFrame().Value);
+			UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: Section '%s' does not contain the split time: %d. Exiting."), __FUNCTION__, *InAudioSection->GetName(), SplitTime.Time.GetFrame().Value);
 			return;
 		}
 
@@ -998,11 +998,11 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		UMovieSceneAudioSection* NewSection = Cast<UMovieSceneAudioSection>(InAudioSection->SplitSection(SplitTime, bDeleteKeysWhenTrimming));
 		if (!NewSection)
 		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("Failed to split section: %s"), *InAudioSection->GetName());
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Failed to split section: %s"), __FUNCTION__, *InAudioSection->GetName());
 			return;
 		}
 
-		UE_LOG(LogAudioTrimmer, Log, TEXT("Created new section: %s with range: [%d, %d]"), *NewSection->GetName(), NewSection->GetInclusiveStartFrame().Value, NewSection->GetExclusiveEndFrame().Value);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Created new section: %s with range: [%d, %d]"), __FUNCTION__, *NewSection->GetName(), NewSection->GetInclusiveStartFrame().Value, NewSection->GetExclusiveEndFrame().Value);
 
 		// Reset the newly created section
 		ResetTrimmedAudioSection(NewSection);
@@ -1014,10 +1014,10 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		// Move to the next split point
 		InAudioSection = NewSection;
 		CurrentStartTimeMs = NextEndTimeMs;
-		UE_LOG(LogAudioTrimmer, Log, TEXT("Next CurrentStartTimeMs: %d"), CurrentStartTimeMs);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Next CurrentStartTimeMs: %d"), __FUNCTION__, CurrentStartTimeMs);
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("Splitting complete, split into %d new sections."), OutNewSectionsContainer.Num());
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Splitting complete, split into %d new sections."), __FUNCTION__, OutNewSectionsContainer.Num());
 }
 
 // Returns the actual start time of the audio section in the level Sequence in milliseconds
