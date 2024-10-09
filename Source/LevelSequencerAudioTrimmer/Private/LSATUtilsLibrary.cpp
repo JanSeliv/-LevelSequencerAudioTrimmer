@@ -27,35 +27,41 @@
 void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence*>& LevelSequences)
 {
 	/*********************************************************************************************
-	 * Preprocessing: Prepares the `TrimTimesMultiMap` map that combines sound waves with their corresponding trim times.
+	 * Gathering: Prepares the `TrimTimesMultiMap` map that combines sound waves with their corresponding trim times.
 	 *********************************************************************************************
-	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
-	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
-	 * 3. HandleTrackBoundaries ➔ Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
-	 * 4. HandleLargeStartOffset ➔ Handles cases where the start offset is larger than the total length of the audio.
-	 * 5. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
-	 * 6. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
-	 * 7. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
+	 * 1. GatherSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
+	 * 2. GatherSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
+	 * 3. GatherSoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
 
 	for (const ULevelSequence* LevelSequence : LevelSequences)
 	{
-		HandleSoundsInRequestedLevelSequence(/*out*/TrimTimesMultiMap, LevelSequence);
-		if (TrimTimesMultiMap.IsEmpty())
-		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: No valid trim times found in the level sequence."), __FUNCTION__);
-			return;
-		}
-
-		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
-		HandleTrackBoundaries(/*InOut*/TrimTimesMultiMap);
-		HandleLargeStartOffset(/*InOut*/TrimTimesMultiMap);
-		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
-		HandlePolicySoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
-		HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
+		GatherSoundsInRequestedLevelSequence(/*out*/TrimTimesMultiMap, LevelSequence);
+		GatherSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
+		GatherSoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
 	}
+
+	/*********************************************************************************************
+	 * Preprocessing: Initial modifying of the `TrimTimesMultiMap` map based on the gathered sounds.
+	 *********************************************************************************************
+	 * 1. HandleTrackBoundaries ➔ Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
+	 * 2. HandleLargeStartOffset ➔ Handles cases where the start offset is larger than the total length of the audio.
+	 * 3. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
+	 * 4. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
+	 ********************************************************************************************* */
+
+	if (TrimTimesMultiMap.IsEmpty())
+	{
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: No valid sound waves found for trimming."), __FUNCTION__);
+		return;
+	}
+
+	HandleTrackBoundaries(/*InOut*/TrimTimesMultiMap);
+	HandleLargeStartOffset(/*InOut*/TrimTimesMultiMap);
+	HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
+	HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Found %d unique sound waves with valid trim times."), __FUNCTION__, TrimTimesMultiMap.Num());
 
@@ -191,7 +197,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
  ********************************************************************************************* */
 
 // Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence
-void ULSATUtilsLibrary::HandleSoundsInRequestedLevelSequence(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap, const ULevelSequence* LevelSequence)
+void ULSATUtilsLibrary::GatherSoundsInRequestedLevelSequence(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap, const ULevelSequence* LevelSequence)
 {
 	if (!ensureMsgf(LevelSequence, TEXT("ASSERT: [%i] %hs:\n'LevelSequence' is not valid!"), __LINE__, __FUNCTION__))
 	{
@@ -222,8 +228,13 @@ void ULSATUtilsLibrary::HandleSoundsInRequestedLevelSequence(FLSATTrimTimesMulti
 }
 
 // Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences
-void ULSATUtilsLibrary::HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+void ULSATUtilsLibrary::GatherSoundsInOtherSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
+	if (InOutTrimTimesMultiMap.IsEmpty())
+	{
+		return;
+	}
+
 	for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& ItRef : InOutTrimTimesMultiMap)
 	{
 		const USoundWave* OriginalSoundWave = ItRef.Key;
@@ -517,8 +528,13 @@ void ULSATUtilsLibrary::HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutT
 
 // Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints
 // Handles the policy for sounds used outside of level sequences, e.g., skipping or duplicating them.
-void ULSATUtilsLibrary::HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+void ULSATUtilsLibrary::GatherSoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
+	if (InOutTrimTimesMultiMap.IsEmpty())
+	{
+		return;
+	}
+
 	TArray<USoundWave*> SoundsOutsideSequences;
 	InOutTrimTimesMultiMap.GetSounds(SoundsOutsideSequences, [](const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& It)
 	{

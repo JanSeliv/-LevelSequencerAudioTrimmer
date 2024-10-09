@@ -36,7 +36,7 @@ public:
 	static void RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence*>& LevelSequences);
 
 	/*********************************************************************************************
-	 * Preprocessing
+	 * Gathering Sounds
 	 * Prepares the `TrimTimesMultiMap` map that combines sound waves with their corresponding trim times.
 	 ********************************************************************************************* */
 public:
@@ -44,12 +44,22 @@ public:
 	 * @param InOutTrimTimesMultiMap Combines and returns a map of sound waves to their corresponding trim times.
 	 * @param LevelSequence The main level sequence to search for audio sections. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
-	static void HandleSoundsInRequestedLevelSequence(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap, const ULevelSequence* LevelSequence);
+	static void GatherSoundsInRequestedLevelSequence(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap, const ULevelSequence* LevelSequence);
 
 	/** Handles those sounds from requested Level Sequence that are used at the same time in other Level Sequences.
 	* @param InOutTrimTimesMultiMap Takes the map of sound waves and adds the trim times with sections of the sound waves that are used in other sequences. */
 	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
-	static void HandleSoundsInOtherSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+	static void GatherSoundsInOtherSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+
+	/** Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints.
+	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it if matches found with external used sounds.  */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
+	static void GatherSoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+
+	/*********************************************************************************************
+	 * Preprocessing
+	 * Initial modifying of the `TrimTimesMultiMap` map based on the gathered sounds. 
+	 ********************************************************************************************* */
 
 	/** Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it based on the trim times. */
@@ -64,11 +74,6 @@ public:
 	/** Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it based on the policy for looping sounds. */
 	static void HandlePolicyLoopingSounds(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
-
-	/** Main goal of this function is to handle those sounds that are used outside of level sequences like in the world or blueprints.
-	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it if matches found with external used sounds.  */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
-	static void HandlePolicySoundsOutsideSequences(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
 
 	/** Handles the reuse and fragmentation of sound segments within a level sequence.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it according to the segment reuse policy. */
