@@ -53,7 +53,13 @@ public:
 
 	/** Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it based on the trim times. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
 	static void HandleTrackBoundaries(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+
+	/** Handles cases where the start offset is larger than the total length of the audio.
+     * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it based on the start offset. */
+	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Preprocessing")
+	static void HandleLargeStartOffset(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
 
 	/** Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it based on the policy for looping sounds. */

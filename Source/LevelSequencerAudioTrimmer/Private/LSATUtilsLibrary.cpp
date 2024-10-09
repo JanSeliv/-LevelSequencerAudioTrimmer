@@ -32,9 +32,10 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 * 1. HandleSoundsInRequestedLevelSequence ➔ Prepares a map of sound waves to their corresponding trim times based on the audio sections used in the given level sequence.
 	 * 2. HandleSoundsInOtherSequences ➔ Handles those sounds from original Level Sequence that are used at the same time in other Level Sequences.
 	 * 3. HandleTrackBoundaries ➔ Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
-	 * 4. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
-	 * 5. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
-	 * 6. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
+	 * 4. HandleLargeStartOffset ➔ Handles cases where the start offset is larger than the total length of the audio.
+	 * 5. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
+	 * 6. HandlePolicySoundsOutsideSequences ➔ Handle sound waves that are used outside of level sequences like in the world or blueprints.
+	 * 7. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
 	 ********************************************************************************************* */
 
 	FLSATTrimTimesMultiMap TrimTimesMultiMap;
@@ -50,6 +51,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 
 		HandleSoundsInOtherSequences(/*InOut*/TrimTimesMultiMap);
 		HandleTrackBoundaries(/*InOut*/TrimTimesMultiMap);
+		HandleLargeStartOffset(/*InOut*/TrimTimesMultiMap);
 		HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
 		HandlePolicySoundsOutsideSequences(/*InOut*/TrimTimesMultiMap);
 		HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
@@ -347,6 +349,46 @@ void ULSATUtilsLibrary::HandleTrackBoundaries(FLSATTrimTimesMultiMap& InOutTrimT
 
 				TrimTimes = CalculateTrimTimesInSection(AudioSection);
 				UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Finished trim to boundaries the section '%s' | %s"), __FUNCTION__, *AudioSection->GetName(), *TrimTimes.ToString(TickResolution));
+			}
+		}
+	}
+}
+
+// Handles cases where the start offset is larger than the total length of the audio
+void ULSATUtilsLibrary::HandleLargeStartOffset(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+{
+	for (TTuple<TObjectPtr<USoundWave>, FLSATTrimTimesMap>& SoundWaveEntry : InOutTrimTimesMultiMap)
+	{
+		FLSATTrimTimesMap& TrimTimesMap = SoundWaveEntry.Value;
+
+		for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& TrimTimesEntry : TrimTimesMap.TrimTimesMap)
+		{
+			FLSATTrimTimes& TrimTimes = TrimTimesEntry.Key;
+			FLSATSectionsContainer& SectionsContainer = TrimTimesEntry.Value;
+
+			for (UMovieSceneAudioSection* AudioSection : SectionsContainer)
+			{
+				if (!AudioSection)
+				{
+					continue;
+				}
+
+				const FFrameRate TickResolution = GetTickResolution(AudioSection);
+				if (!TickResolution.IsValid())
+				{
+					UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: TickResolution is not valid for audio section '%s'"), __FUNCTION__, *AudioSection->GetName());
+					continue;
+				}
+
+				const int32 TotalSoundDurationMs = TrimTimes.GetSoundTotalDurationMs();
+
+				// Adjust the start offset if it is larger than the entire sound duration
+				if (TrimTimes.SoundTrimStartMs >= TotalSoundDurationMs)
+				{
+					TrimTimes.SoundTrimStartMs = TrimTimes.SoundTrimStartMs % TotalSoundDurationMs;
+					AudioSection->SetStartOffset(ConvertMsToFrameNumber(TrimTimes.SoundTrimStartMs, TickResolution));
+					UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Start offset is larger than duration for section '%s'. Adjusted StartOffset to: %d ms."), __FUNCTION__, *AudioSection->GetName(), TrimTimes.SoundTrimStartMs);
+				}
 			}
 		}
 	}
@@ -989,7 +1031,7 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		// Check if the section contains the split time
 		if (!InAudioSection->GetRange().Contains(SplitTime.Time.GetFrame()))
 		{
-			UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: Section '%s' does not contain the split time: %d. Exiting."), __FUNCTION__, *InAudioSection->GetName(), SplitTime.Time.GetFrame().Value);
+			UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: ERROR: Section '%s' does not contain the split time: %d | %s"), __FUNCTION__, *InAudioSection->GetName(), SplitTime.Time.GetFrame().Value, *TrimTimes.ToString(TickResolution));
 			return;
 		}
 
