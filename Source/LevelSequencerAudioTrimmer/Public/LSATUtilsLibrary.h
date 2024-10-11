@@ -158,8 +158,8 @@ public:
 	/** Calculates the start and end times in milliseconds for trimming an audio section.
 	 * @param AudioSection The audio section to calculate trim times for.
 	 * @return A struct containing the start and end times in milliseconds. */
-	UFUNCTION(BlueprintCallable, Category = "Audio Trimmer|Utilities")
-	static FLSATTrimTimes CalculateTrimTimesInSection(UMovieSceneAudioSection* AudioSection);
+	UFUNCTION(BlueprintPure, Category = "Audio Trimmer|Utilities")
+	static FLSATTrimTimes MakeTrimTimes(const UMovieSceneAudioSection* AudioSection);
 
 	/** Splits the looping segments in the given trim times into multiple sections.
 	 * Appends the original and newly created sections to the output container.

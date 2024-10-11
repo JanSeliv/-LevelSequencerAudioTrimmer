@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
-//---
 #include "LSATTrimTimesData.generated.h"
 
 class USoundWave;
@@ -13,21 +11,29 @@ struct FFrameRate;
 /**
  * Represents the start and end times in milliseconds for trimming an audio section.
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta = (HasNativeMake = "/Script/LevelSequencerAudioTrimmerEd.LSATUtilsLibrary.MakeTrimTimes"))
 struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 {
 	GENERATED_BODY()
 
 	FLSATTrimTimes() = default;
-	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs);
+	FLSATTrimTimes(const class UMovieSceneAudioSection* AudioSection);
+	FLSATTrimTimes(int32 InStartTimeMs, int32 InEndTimeMs, USoundWave* InSoundWave);
 
 	/*********************************************************************************************
 	 * Trim Times Data
 	 ********************************************************************************************* */
-
+public:
 	/** Invalid trim times. */
 	static const FLSATTrimTimes Invalid;
 
+	FORCEINLINE int32 GetSoundTrimStartMs() const { return SoundTrimStartMs; }
+	FORCEINLINE int32 GetSoundTrimEndMs() const { return SoundTrimEndMs; }
+
+	FORCEINLINE USoundWave* GetSoundWave() const { return SoundWave.Get(); }
+	FORCEINLINE void SetSoundWave(USoundWave* InSoundWave) { SoundWave = InSoundWave; }
+
+protected:
 	/** The start time in milliseconds from the sound asset where trimming begins.
 	* This value represents the point in the sound where playback starts after the audio section has been trimmed from the left,
 	meaning the sound does not necessarily start from its original beginning. */
@@ -45,9 +51,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimes
 	TObjectPtr<USoundWave> SoundWave = nullptr;
 
 	/*********************************************************************************************
-	 * Trim Times Methods
+	 * Trim Times Helpers
 	 ********************************************************************************************* */
-
+public:
 	/** Returns SoundTrimStartMs in seconds. */
 	FORCEINLINE float GetSoundTrimStartSeconds() const { return static_cast<float>(SoundTrimStartMs) / 1000.f; }
 
@@ -112,22 +118,21 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
 {
 	GENERATED_BODY()
 
-	/** The array of audio sections to trim. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TArray<TObjectPtr<class UMovieSceneAudioSection>> AudioSections;
-
 	/** Sets the sound wave for all audio sections in this container. */
 	void SetSound(USoundWave* SoundWave);
 
 	auto begin() const { return AudioSections.begin(); }
 	auto end() const { return AudioSections.end(); }
-	auto begin() { return AudioSections.begin(); }
-	auto end() { return AudioSections.end(); }
 
 	bool Add(UMovieSceneAudioSection* AudioSection);
 	int32 Num() const { return AudioSections.Num(); }
 	bool IsEmpty() const { return AudioSections.IsEmpty(); }
 	void Append(const FLSATSectionsContainer& Other) { AudioSections.Append(Other.AudioSections); }
+
+protected:
+	/** The array of audio sections to trim. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
+	TArray<TObjectPtr<class UMovieSceneAudioSection>> AudioSections;
 };
 
 /** Custom function to process each audio section in this map.
@@ -137,7 +142,6 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
  * @param OutAllNewSections Used to collect new sections created by the Processor. */
 typedef TFunctionRef<void(UMovieSceneAudioSection* /*AudioSection*/, const FLSATTrimTimes& /*TrimTimes*/, FLSATSectionsContainer& /*OutAllNewSections*/)> FLSATSectionsProcessor;
 
-
 /**
  * Represents the map of trim times to the container of audio sections to trim.
  */
@@ -146,32 +150,37 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 {
 	GENERATED_BODY()
 
-	/** The key is the trim times, and the value is the array of audio sections to trim. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TMap<FLSATTrimTimes, FLSATSectionsContainer> TrimTimesMap;
-
 	/** Returns first audio section from the audio sections container. */
-	UMovieSceneAudioSection* GetFirstAudioSection() const;
+	const UMovieSceneAudioSection* GetFirstAudioSection() const;
 
 	/** Sets the sound wave for all trim times and audio sections in this map. */
 	void SetSound(USoundWave* SoundWave);
 
-	/** Processes each audio section in this map and rebuilds the map if new sections are created.
-	 * The Processor is expected to create or split new sections and add new ones to Processor's OutAllNewSections.
-	 * Only entries with new sections will be removed and recalculated.
+	/** Is supposed to be called when needed to change any values inside the map, instead of changing them directly.
+	 * Processes each audio section in this map and rebuilds the map.
+	 * The Processor is expected to modify, create or split new sections adding them to OutAllNewSections.
+	 * Map will be recalculated if only OutAllNewSections is not empty.
 	 * @param Processor The custom function to process each audio section. */
 	void RebuildTrimTimesMapWithProcessor(const FLSATSectionsProcessor& Processor);
 
 	auto begin() const { return TrimTimesMap.begin(); }
 	auto end() const { return TrimTimesMap.end(); }
-	auto begin() { return TrimTimesMap.begin(); }
-	auto end() { return TrimTimesMap.end(); }
 
 	FORCEINLINE int32 Num() const { return TrimTimesMap.Num(); }
 	FORCEINLINE bool IsEmpty() const { return TrimTimesMap.IsEmpty(); }
+	void GetKeys(TArray<FLSATTrimTimes>& OutKeys) const { TrimTimesMap.GetKeys(OutKeys); }
+
 	bool Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection);
 	FLSATSectionsContainer& Add(const FLSATTrimTimes& TrimTimes, const FLSATSectionsContainer& SectionsContainer);
+
 	void Remove(const FLSATTrimTimes& TrimTimes) { TrimTimesMap.Remove(TrimTimes); }
+
+	void SortKeys();
+
+protected:
+	/** The key is the trim times, and the value is the array of audio sections to trim. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
+	TMap<FLSATTrimTimes, FLSATSectionsContainer> TrimTimesMap;
 };
 
 /**
@@ -181,10 +190,6 @@ USTRUCT(BlueprintType)
 struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 {
 	GENERATED_BODY()
-
-	/** The key is the sound wave, and the value is the map of trim times to the container of audio sections to trim. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
-	TMap<TObjectPtr<USoundWave>, FLSATTrimTimesMap> TrimTimesMultiMap;
 
 	/** Returns all sounds waves from this multimap that satisfies the given predicate. */
 	void GetSounds(TArray<USoundWave*>& OutSoundWaves, const TFunctionRef<bool(const TTuple<FLSATTrimTimes, FLSATSectionsContainer>&)>& Predicate) const;
@@ -200,4 +205,9 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMultiMap
 	FORCEINLINE FLSATTrimTimesMap& Add(USoundWave* SoundWave, const FLSATTrimTimesMap& TrimTimesMap) { return TrimTimesMultiMap.Add(SoundWave, TrimTimesMap); }
 	void Remove(const USoundWave* SoundWave) { TrimTimesMultiMap.Remove(SoundWave); }
 	void Remove(const TArray<USoundWave*>& SoundWaves);
+
+protected:
+	/** The key is the sound wave, and the value is the map of trim times to the container of audio sections to trim. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Audio Trimmer")
+	TMap<TObjectPtr<USoundWave>, FLSATTrimTimesMap> TrimTimesMultiMap;
 };

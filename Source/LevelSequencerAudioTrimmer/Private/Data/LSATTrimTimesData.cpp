@@ -17,10 +17,37 @@
  ********************************************************************************************* */
 
 /** Invalid trim times. */
-const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1};
+const FLSATTrimTimes FLSATTrimTimes::Invalid = FLSATTrimTimes{-1, -1, nullptr};
 
-FLSATTrimTimes::FLSATTrimTimes(int32 InSoundTrimStartMs, int32 InSoundTrimEndMs)
-	: SoundTrimStartMs(InSoundTrimStartMs), SoundTrimEndMs(InSoundTrimEndMs) {}
+FLSATTrimTimes::FLSATTrimTimes(const UMovieSceneAudioSection* AudioSection)
+{
+	const FFrameRate TickResolution = ULSATUtilsLibrary::GetTickResolution(AudioSection);
+	if (!ensureMsgf(TickResolution.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TickResolution' is not valid!"), __LINE__, __FUNCTION__))
+	{
+		*this = Invalid;
+		return;
+	}
+
+	SoundWave = Cast<USoundWave>(AudioSection->GetSound());
+	if (!ensureMsgf(SoundWave, TEXT("ASSERT: [%i] %hs:\n'SoundWave' is not valid!"), __LINE__, __FUNCTION__)
+		|| !ensureMsgf(GetSoundTotalDurationMs() > 0.f, TEXT("ASSERT: [%i] %hs:\nDuration of '%s' sound is not valid!"), __LINE__, __FUNCTION__, *GetNameSafe(SoundWave)))
+	{
+		*this = Invalid;
+		return;
+	}
+
+	// Get the audio start offset in frames (relative to the audio asset)
+	SoundTrimStartMs = ULSATUtilsLibrary::ConvertFrameToMs(AudioSection->GetStartOffset(), TickResolution);
+
+	// Calculate the effective end time within the audio asset
+	const int32 SectionStartFrame = ULSATUtilsLibrary::GetSectionInclusiveStartTimeMs(AudioSection);
+	const int32 SectionEndMs = ULSATUtilsLibrary::GetSectionExclusiveEndTimeMs(AudioSection);
+	const int32 SectionDurationMs = SectionEndMs - SectionStartFrame;
+	SoundTrimEndMs = GetSoundTrimStartMs() + SectionDurationMs;
+}
+
+FLSATTrimTimes::FLSATTrimTimes(int32 InSoundTrimStartMs, int32 InSoundTrimEndMs, USoundWave* InSoundWave)
+	: SoundTrimStartMs(InSoundTrimStartMs), SoundTrimEndMs(InSoundTrimEndMs), SoundWave(InSoundWave) {}
 
 /*********************************************************************************************
  * Trim Times Methods
@@ -176,10 +203,23 @@ bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
  ********************************************************************************************* */
 
 // Returns first audio section from the audio sections container
-UMovieSceneAudioSection* FLSATTrimTimesMap::GetFirstAudioSection() const
+const UMovieSceneAudioSection* FLSATTrimTimesMap::GetFirstAudioSection() const
 {
 	const FLSATSectionsContainer* Sections = !TrimTimesMap.IsEmpty() ? &TrimTimesMap.CreateConstIterator()->Value : nullptr;
-	return Sections && !Sections->IsEmpty() ? Sections->AudioSections[0] : nullptr;
+	if (!Sections || Sections->IsEmpty())
+	{
+		return nullptr;
+	}
+
+	for (const UMovieSceneAudioSection* AudioSection : *Sections)
+	{
+		if (AudioSection)
+		{
+			return AudioSection;
+		}
+	}
+
+	return nullptr;
 }
 
 // Sets the sound wave for all trim times in this map
@@ -187,7 +227,7 @@ void FLSATTrimTimesMap::SetSound(USoundWave* SoundWave)
 {
 	for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& ItRef : TrimTimesMap)
 	{
-		ItRef.Key.SoundWave = SoundWave;
+		ItRef.Key.SetSoundWave(SoundWave);
 		ItRef.Value.SetSound(SoundWave);
 	}
 }
@@ -233,6 +273,8 @@ void FLSATTrimTimesMap::RebuildTrimTimesMapWithProcessor(const FLSATSectionsProc
 
 		// Recalculate and merge the new TrimTimes with their associated sections
 		ULSATUtilsLibrary::CalculateTrimTimesInAllSections(*this, AllNewSections);
+
+		SortKeys();
 	}
 }
 
@@ -244,6 +286,33 @@ bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSec
 FLSATSectionsContainer& FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, const FLSATSectionsContainer& SectionsContainer)
 {
 	return TrimTimesMap.Add(TrimTimes, SectionsContainer);
+}
+
+void FLSATTrimTimesMap::SortKeys()
+{
+	TArray<TPair<FLSATTrimTimes, FLSATSectionsContainer>> TrimTimesArray;
+	TrimTimesArray.Reserve(TrimTimesMap.Num());
+	for (const TTuple<FLSATTrimTimes, FLSATSectionsContainer>& It : TrimTimesMap)
+	{
+		TrimTimesArray.Add(It);
+	}
+
+	// Sort the array by SoundTrimStartMs first, then by SoundTrimEndMs
+	TrimTimesArray.Sort([](const TPair<FLSATTrimTimes, FLSATSectionsContainer>& A, const TPair<FLSATTrimTimes, FLSATSectionsContainer>& B)
+	{
+		if (A.Key.GetSoundTrimStartMs() != B.Key.GetSoundTrimStartMs())
+		{
+			return A.Key.GetSoundTrimStartMs() < B.Key.GetSoundTrimStartMs();
+		}
+		return A.Key.GetSoundTrimEndMs() < B.Key.GetSoundTrimEndMs();
+	});
+
+	// Clear the original map and re-populate it with the sorted data
+	TrimTimesMap.Reset();
+	for (const TPair<FLSATTrimTimes, FLSATSectionsContainer>& It : TrimTimesArray)
+	{
+		TrimTimesMap.Add(It);
+	}
 }
 
 /*********************************************************************************************
