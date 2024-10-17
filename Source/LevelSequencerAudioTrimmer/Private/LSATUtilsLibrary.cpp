@@ -1122,7 +1122,7 @@ void ULSATUtilsLibrary::GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrim
 		}
 
 		FLSATTrimTimes NewTrimTimes(StartMs, EndMs, SoundWave);
-		NewTrimTimesArray.Add(MoveTemp(NewTrimTimes));
+		NewTrimTimesArray.AddUnique(MoveTemp(NewTrimTimes));
 	}
 
 	InOutTrimTimes = NewTrimTimesArray;

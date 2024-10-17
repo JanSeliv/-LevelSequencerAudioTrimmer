@@ -127,7 +127,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
 	bool Add(UMovieSceneAudioSection* AudioSection);
 	int32 Num() const { return AudioSections.Num(); }
 	bool IsEmpty() const { return AudioSections.IsEmpty(); }
-	void Append(const FLSATSectionsContainer& Other) { AudioSections.Append(Other.AudioSections); }
+	void Append(const FLSATSectionsContainer& Other);
 
 protected:
 	/** The array of audio sections to trim. */
@@ -171,6 +171,7 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATTrimTimesMap
 	void GetKeys(TArray<FLSATTrimTimes>& OutKeys) const { TrimTimesMap.GetKeys(OutKeys); }
 
 	bool Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection);
+	FLSATSectionsContainer& Add(const FLSATTrimTimes& TrimTimes);
 	FLSATSectionsContainer& Add(const FLSATTrimTimes& TrimTimes, const FLSATSectionsContainer& SectionsContainer);
 
 	void Remove(const FLSATTrimTimes& TrimTimes) { TrimTimesMap.Remove(TrimTimes); }

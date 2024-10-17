@@ -163,18 +163,18 @@ FString FLSATTrimTimes::ToCompactString() const
 // Equal operator for comparing in TMap.
 bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 {
-	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
-	return SoundWave == Other.SoundWave
-		&& FMath::Abs(SoundTrimStartMs - Other.SoundTrimStartMs) <= ToleranceMs
-		&& FMath::Abs(SoundTrimEndMs - Other.SoundTrimEndMs) <= ToleranceMs;
+	return GetTypeHash(*this) == GetTypeHash(Other);
 }
 
 // Hash function to TMap
 uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 {
-	return GetTypeHash(TrimTimes.SoundWave) ^
-		GetTypeHash(TrimTimes.SoundTrimStartMs) ^
-		GetTypeHash(TrimTimes.SoundTrimEndMs);
+	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
+	const int32 RoundedStart = FMath::RoundToInt(static_cast<float>(TrimTimes.SoundTrimStartMs) / ToleranceMs) * ToleranceMs;
+	const int32 RoundedEnd = FMath::RoundToInt(static_cast<float>(TrimTimes.SoundTrimEndMs) / ToleranceMs) * ToleranceMs;
+	return GetTypeHash(RoundedStart)
+		^ GetTypeHash(RoundedEnd)
+		^ GetTypeHash(TrimTimes.SoundWave);
 }
 
 /*********************************************************************************************
@@ -196,6 +196,17 @@ void FLSATSectionsContainer::SetSound(USoundWave* SoundWave)
 bool FLSATSectionsContainer::Add(UMovieSceneAudioSection* AudioSection)
 {
 	return AudioSections.AddUnique(AudioSection) >= 0;
+}
+
+void FLSATSectionsContainer::Append(const FLSATSectionsContainer& Other)
+{
+	for (UMovieSceneAudioSection* SectionIt : Other)
+	{
+		if (SectionIt)
+		{
+			AudioSections.AddUnique(SectionIt);
+		}
+	}
 }
 
 /*********************************************************************************************
@@ -280,7 +291,17 @@ void FLSATTrimTimesMap::RebuildTrimTimesMapWithProcessor(const FLSATSectionsProc
 
 bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
 {
+	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__))
+	{
+		return false;
+	}
+
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
+}
+
+FLSATSectionsContainer& FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes)
+{
+	return TrimTimesMap.Add(TrimTimes);
 }
 
 FLSATSectionsContainer& FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, const FLSATSectionsContainer& SectionsContainer)
