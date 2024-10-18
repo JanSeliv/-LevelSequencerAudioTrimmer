@@ -1051,7 +1051,7 @@ int32 ULSATUtilsLibrary::ConvertMsToFrame(int32 InMilliseconds, const FFrameRate
 	const float FrameNumber = static_cast<float>(TickResolution.AsFrameTime(InSec).GetFrame().Value);
 	const float Frame = FrameNumber / 1000.f;
 
-	return FrameNumber >= 0.f ? FMath::RoundToInt(Frame) : INDEX_NONE;
+	return FrameNumber >= 0.f ? FMath::CeilToInt(Frame) : INDEX_NONE;
 }
 
 FFrameNumber ULSATUtilsLibrary::ConvertMsToFrameNumber(int32 InMilliseconds, const FFrameRate& TickResolution)
@@ -1069,7 +1069,7 @@ int32 ULSATUtilsLibrary::ConvertFrameToMs(const FFrameNumber& InFrame, const FFr
 
 	const double InSec = TickResolution.AsSeconds(InFrame);
 	const double InMs = InSec * 1000.0;
-	return FMath::RoundToInt(InMs);
+	return FMath::CeilToInt(InMs);
 }
 
 // Returns the tick resolution of the level sequence
@@ -1144,11 +1144,12 @@ void ULSATUtilsLibrary::CreateAudioSectionsByTrimTimes(UMovieSceneAudioSection* 
 	// Loop through each fragment in the range and adjust its timing relative to the sequence
 	for (const FLSATTrimTimes& NewTrimTime : InTrimTimes)
 	{
-		const int32 GetSoundTrimStartMs = SectionStartMs + (NewTrimTime.GetSoundTrimStartMs() - InRange.GetSoundTrimStartMs());
+		const int32 SoundTrimStartMs = SectionStartMs + (NewTrimTime.GetSoundTrimStartMs() - InRange.GetSoundTrimStartMs());
 		const int32 SoundTrimEndMs = SectionStartMs + (NewTrimTime.GetSoundTrimEndMs() - InRange.GetSoundTrimStartMs());
-		const FLSATTrimTimes FragmentedTrimTimes(GetSoundTrimStartMs, SoundTrimEndMs, NewTrimTime.GetSoundWave());
+		const FLSATTrimTimes FragmentedTrimTimes(SoundTrimStartMs, SoundTrimEndMs, NewTrimTime.GetSoundWave());
 
-		if (!FragmentedTrimTimes.IsWithinSectionBounds(OriginalAudioSection)
+		if (!FragmentedTrimTimes.IsValidLength(TickResolution)
+			|| !FragmentedTrimTimes.IsWithinSectionBounds(OriginalAudioSection)
 			|| !NewTrimTime.IsWithinTrimBounds(InRange))
 		{
 			continue;

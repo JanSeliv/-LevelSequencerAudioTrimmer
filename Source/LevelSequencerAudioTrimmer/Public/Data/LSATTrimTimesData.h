@@ -84,14 +84,20 @@ public:
 	/** Returns true if the sound is already trimmer, so usage duration and total duration are similar. */
 	bool IsSoundTrimmed() const;
 
-	/** Returns true if the start and end times are valid. */
+	/** Returns true if all data is set and valid. */
 	bool IsValid() const;
+
+	/** Returns true if duration is valid and positive. */
+	bool IsValidLength(const FFrameRate& TickResolution) const;
 
 	/** Checks if the trim times are within the bounds of the given audio section. */
 	bool IsWithinSectionBounds(const class UMovieSceneAudioSection* AudioSection) const;
 
 	/** Checks if the trim times are within the original trim times.*/
 	bool IsWithinTrimBounds(const FLSATTrimTimes& OtherTrimTimes) const;
+
+	/** Returns larger mix of the two trim times: larger start time from both and larger end time from both. */
+	static FLSATTrimTimes GetMaxTrimTimes(const FLSATTrimTimes& Left, const FLSATTrimTimes& Right);
 
 	/** Returns the string representation of the trim times that might be useful for logging. */
 	FString ToString(const FFrameRate& TickResolution) const;

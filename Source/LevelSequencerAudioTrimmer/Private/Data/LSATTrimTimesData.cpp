@@ -100,7 +100,7 @@ int32 FLSATTrimTimes::GetUsagesFrames(const FFrameRate& TickResolution) const
 // Returns the total duration of the sound wave asset in milliseconds, it might be different from the actual usage duration
 int32 FLSATTrimTimes::GetSoundTotalDurationMs() const
 {
-	return SoundWave ? FMath::RoundToInt(SoundWave->Duration * 1000.f) : 0;
+	return SoundWave ? FMath::CeilToInt(SoundWave->Duration * 1000.f) : 0;
 }
 
 // Returns true if the sound is already trimmer, so usage duration and total duration are similar
@@ -120,6 +120,21 @@ bool FLSATTrimTimes::IsValid() const
 		&& SoundWave != nullptr;
 }
 
+// Returns true if duration is valid and positive
+bool FLSATTrimTimes::IsValidLength(const FFrameRate& TickResolution) const
+{
+	if (!IsValid()
+		|| !TickResolution.IsValid()
+		|| GetUsageDurationMs() < ULSATSettings::Get().MinDifferenceMs)
+	{
+		return false;
+	}
+
+	const FFrameNumber SectionStartFrame = ULSATUtilsLibrary::ConvertMsToFrameNumber(SoundTrimStartMs, TickResolution);
+	const FFrameNumber SectionEndFrame = ULSATUtilsLibrary::ConvertMsToFrameNumber(SoundTrimEndMs, TickResolution);
+	return SectionStartFrame < SectionEndFrame;
+}
+
 // Checks if the trim times are within the bounds of the given audio section
 bool FLSATTrimTimes::IsWithinSectionBounds(const UMovieSceneAudioSection* AudioSection) const
 {
@@ -134,6 +149,16 @@ bool FLSATTrimTimes::IsWithinTrimBounds(const FLSATTrimTimes& OtherTrimTimes) co
 {
 	return SoundTrimStartMs >= OtherTrimTimes.SoundTrimStartMs
 		&& SoundTrimEndMs <= OtherTrimTimes.SoundTrimEndMs;
+}
+
+// Returns larger mix of the two trim times: larger start time from both and larger end time from both
+FLSATTrimTimes FLSATTrimTimes::GetMaxTrimTimes(const FLSATTrimTimes& Left, const FLSATTrimTimes& Right)
+{
+	return FLSATTrimTimes{
+		FMath::Max(Left.SoundTrimStartMs, Right.SoundTrimStartMs),
+		FMath::Max(Left.SoundTrimEndMs, Right.SoundTrimEndMs),
+		Left.SoundWave
+	};
 }
 
 // Returns the string representation of the trim times that might be useful for logging
@@ -170,8 +195,13 @@ bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 {
 	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
-	const int32 RoundedStart = FMath::RoundToInt(static_cast<float>(TrimTimes.SoundTrimStartMs) / ToleranceMs) * ToleranceMs;
-	const int32 RoundedEnd = FMath::RoundToInt(static_cast<float>(TrimTimes.SoundTrimEndMs) / ToleranceMs) * ToleranceMs;
+
+	const int32 StartDivided = TrimTimes.SoundTrimStartMs / ToleranceMs;
+	const int32 EndDivided = TrimTimes.SoundTrimEndMs / ToleranceMs;
+
+	const int32 RoundedStart = StartDivided * ToleranceMs;
+	const int32 RoundedEnd = EndDivided * ToleranceMs;
+
 	return GetTypeHash(RoundedStart)
 		^ GetTypeHash(RoundedEnd)
 		^ GetTypeHash(TrimTimes.SoundWave);
@@ -291,11 +321,25 @@ void FLSATTrimTimesMap::RebuildTrimTimesMapWithProcessor(const FLSATSectionsProc
 
 bool FLSATTrimTimesMap::Add(const FLSATTrimTimes& TrimTimes, UMovieSceneAudioSection* AudioSection)
 {
-	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__))
+	if (!ensureMsgf(AudioSection, TEXT("ASSERT: [%i] %hs:\n'AudioSection' is not valid!"), __LINE__, __FUNCTION__)
+		|| !ensureMsgf(TrimTimes.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TrimTimes' is not valid!"), __LINE__, __FUNCTION__))
 	{
 		return false;
 	}
 
+	for (TTuple<FLSATTrimTimes, FLSATSectionsContainer>& ItRef : TrimTimesMap)
+	{
+		FLSATTrimTimes& TrimTimesRef = ItRef.Key;
+		if (TrimTimesRef == TrimTimes)
+		{
+			// Assign the larger trim times as it might be not the same due to MinDifferenceMs
+			TrimTimesRef = FLSATTrimTimes::GetMaxTrimTimes(TrimTimes, TrimTimesRef);
+
+			return ItRef.Value.Add(AudioSection);
+		}
+	}
+
+	// No Trim Times found, add a new one
 	return TrimTimesMap.FindOrAdd(TrimTimes).Add(AudioSection);
 }
 
