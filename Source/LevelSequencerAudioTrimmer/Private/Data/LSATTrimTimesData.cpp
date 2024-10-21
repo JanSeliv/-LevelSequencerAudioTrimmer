@@ -117,7 +117,8 @@ bool FLSATTrimTimes::IsValid() const
 {
 	return SoundTrimStartMs >= 0
 		&& SoundTrimEndMs >= 0
-		&& SoundWave != nullptr;
+		&& SoundWave != nullptr
+		&& GetUsageDurationMs() > 0;
 }
 
 // Returns true if duration is valid and positive
