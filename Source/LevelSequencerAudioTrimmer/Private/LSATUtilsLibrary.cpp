@@ -1107,7 +1107,7 @@ void ULSATUtilsLibrary::GetFragmentedTrimTimes(TArray<FLSATTrimTimes>& InOutTrim
 	SortedSplitPointsMs.Sort();
 
 	// Create new trim times based on the split points
-	const int32 MinDurationMs = ULSATSettings::Get().MinDifferenceMs;
+	const int32 MinDurationMs = ULSATSettings::GetMinDifferenceMs();
 
 	for (int32 i = 0; i < SortedSplitPointsMs.Num() - 1; ++i)
 	{

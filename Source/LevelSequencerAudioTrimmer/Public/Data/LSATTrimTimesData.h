@@ -131,8 +131,10 @@ struct LEVELSEQUENCERAUDIOTRIMMERED_API FLSATSectionsContainer
 	auto end() const { return AudioSections.end(); }
 
 	bool Add(UMovieSceneAudioSection* AudioSection);
-	int32 Num() const { return AudioSections.Num(); }
-	bool IsEmpty() const { return AudioSections.IsEmpty(); }
+	FORCEINLINE int32 Num() const { return AudioSections.Num(); }
+	FORCEINLINE bool IsEmpty() const { return AudioSections.IsEmpty(); }
+	FORCEINLINE bool Contains(const UMovieSceneAudioSection* AudioSection) const { return AudioSections.Contains(AudioSection); }
+
 	void Append(const FLSATSectionsContainer& Other);
 
 protected:

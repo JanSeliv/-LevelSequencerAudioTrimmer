@@ -25,8 +25,12 @@ public:
 	/** Gets the category for the settings, some high level grouping like, Editor, Engine, Game...etc. */
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
-	/** Skip processing if the difference between total audio duration and section usage is less than this value. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming", meta = (ClampMin = "0", UIMin = "0"))
+	/** Getter of the minimum difference between total audio duration and section usage. */ 
+	static FORCEINLINE int32 GetMinDifferenceMs() { return FMath::Max(Get().MinDifferenceMs, 1); }
+
+	/** Skip processing if the difference between total audio duration and section usage is less than this value.
+	 * It shouldn't be less than 1 ms, as it might cause issues with the calculations. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Config, Category = "Audio Trimming", meta = (ClampMin = "1", UIMin = "1"))
 	int32 MinDifferenceMs;
 
 	/** Policy for handling the audio tracks that are looping meaning a sound is repeating playing from the start. */

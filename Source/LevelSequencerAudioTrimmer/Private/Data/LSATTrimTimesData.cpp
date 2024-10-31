@@ -70,7 +70,7 @@ bool FLSATTrimTimes::IsLooping() const
 {
 	const int32 DifferenceMs = SoundTrimEndMs - GetSoundTotalDurationMs();
 	return SoundTrimEndMs > GetSoundTotalDurationMs()
-		&& DifferenceMs >= ULSATSettings::Get().MinDifferenceMs;
+		&& DifferenceMs >= ULSATSettings::GetMinDifferenceMs();
 }
 
 // Returns the usage percentage of the sound wave asset in 0-100 range
@@ -106,7 +106,7 @@ int32 FLSATTrimTimes::GetSoundTotalDurationMs() const
 // Returns true if the sound is already trimmer, so usage duration and total duration are similar
 bool FLSATTrimTimes::IsSoundTrimmed() const
 {
-	const int32 MinDifferenceMs = ULSATSettings::Get().MinDifferenceMs;
+	const int32 MinDifferenceMs = ULSATSettings::GetMinDifferenceMs();
 	const int32 DifferenceMs = GetSoundTotalDurationMs() - GetUsageDurationMs();
 	return DifferenceMs < MinDifferenceMs
 		&& SoundTrimStartMs < MinDifferenceMs;
@@ -126,7 +126,7 @@ bool FLSATTrimTimes::IsValidLength(const FFrameRate& TickResolution) const
 {
 	if (!IsValid()
 		|| !TickResolution.IsValid()
-		|| GetUsageDurationMs() < ULSATSettings::Get().MinDifferenceMs)
+		|| GetUsageDurationMs() < ULSATSettings::GetMinDifferenceMs())
 	{
 		return false;
 	}
@@ -195,7 +195,7 @@ bool FLSATTrimTimes::operator==(const FLSATTrimTimes& Other) const
 // Hash function to TMap
 uint32 GetTypeHash(const FLSATTrimTimes& TrimTimes)
 {
-	const int32 ToleranceMs = ULSATSettings::Get().MinDifferenceMs;
+	const int32 ToleranceMs = ULSATSettings::GetMinDifferenceMs();
 
 	const int32 StartDivided = TrimTimes.SoundTrimStartMs / ToleranceMs;
 	const int32 EndDivided = TrimTimes.SoundTrimEndMs / ToleranceMs;
