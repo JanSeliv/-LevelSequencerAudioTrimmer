@@ -49,7 +49,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	 * 1. HandleTrackBoundaries ➔ Trims the audio tracks by level sequence boundaries, so the audio is not played outside of the level sequence.
 	 * 2. HandleLargeStartOffset ➔ Handles cases where the start offset is larger than the total length of the audio.
 	 * 3. HandlePolicyLoopingSounds ➔ Handles the policy for looping sounds based on the settings, e.g: skipping all looping sounds.
-	 * 4. HandlePolicySegmentsReuse ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
+	 * 4. HandlePolicyFragmentation ➔ Handles the reuse and fragmentation of sound segments within a level sequence.
 	 ********************************************************************************************* */
 
 	if (TrimTimesMultiMap.IsEmpty())
@@ -61,7 +61,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 	HandleTrackBoundaries(/*InOut*/TrimTimesMultiMap);
 	HandleLargeStartOffset(/*InOut*/TrimTimesMultiMap);
 	HandlePolicyLoopingSounds(/*InOut*/TrimTimesMultiMap);
-	HandlePolicySegmentsReuse(/*InOut*/TrimTimesMultiMap);
+	HandlePolicyFragmentation(/*InOut*/TrimTimesMultiMap);
 
 	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Found %d unique sound waves with valid trim times."), __FUNCTION__, TrimTimesMultiMap.Num());
 
@@ -210,7 +210,7 @@ void ULSATUtilsLibrary::GatherSoundsInRequestedLevelSequence(FLSATTrimTimesMulti
 
 	if (MainAudioSectionsMap.IsEmpty())
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: No audio sections found in the level sequence."), __FUNCTION__);
+		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Skipping: no audio found in the level sequence '%s'"), __FUNCTION__, *GetNameSafe(LevelSequence));
 		return;
 	}
 
@@ -556,15 +556,15 @@ void ULSATUtilsLibrary::GatherSoundsOutsideSequences(FLSATTrimTimesMultiMap& InO
 }
 
 // Handles the reuse and fragmentation of sound segments within a level sequence
-void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
+void ULSATUtilsLibrary::HandlePolicyFragmentation(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap)
 {
-	switch (ULSATSettings::Get().PolicySegmentsReuse)
+	switch (ULSATSettings::Get().PolicyFragmentation)
 	{
-	case ELSATPolicySegmentsReuse::KeepOriginal:
+	case ELSATPolicyFragmentation::None:
 		// Segments will not be fragmented and reused, but kept as original
 		break;
 
-	case ELSATPolicySegmentsReuse::SplitToSmaller:
+	case ELSATPolicyFragmentation::SplitToSmaller:
 		/** Segments will be fragmented into smaller reusable parts, with each usage sharing overlapping segments.
 		 * 
 		 * [BEFORE]
@@ -629,7 +629,7 @@ void ULSATUtilsLibrary::HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutT
 		break;
 
 	default:
-		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicySegmentsReuse value!"), __LINE__, __FUNCTION__);
+		ensureMsgf(false, TEXT("ERROR: [%i] %hs:\nUnhandled PolicyFragmentation value!"), __LINE__, __FUNCTION__);
 	}
 }
 

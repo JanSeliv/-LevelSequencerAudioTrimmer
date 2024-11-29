@@ -77,7 +77,7 @@ public:
 
 	/** Handles the reuse and fragmentation of sound segments within a level sequence.
 	 * @param InOutTrimTimesMultiMap Takes the map of sound waves and modifies it according to the segment reuse policy. */
-	static void HandlePolicySegmentsReuse(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
+	static void HandlePolicyFragmentation(FLSATTrimTimesMultiMap& InOutTrimTimesMultiMap);
 
 	/*********************************************************************************************
 	 * Main Flow

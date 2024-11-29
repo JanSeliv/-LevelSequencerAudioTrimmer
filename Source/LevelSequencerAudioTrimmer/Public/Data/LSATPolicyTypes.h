@@ -49,10 +49,10 @@ enum class ELSATPolicyDifferentTrimTimes : uint8
 * This policy control how overlapping sound usage is processed when trimming and reimporting sound assets.
 */
 UENUM(BlueprintType)
-enum class ELSATPolicySegmentsReuse : uint8
+enum class ELSATPolicyFragmentation : uint8
 {
 	///< Segments will not be fragmented and reused, but kept as original.
-	KeepOriginal,
+	None,
 	///< Segments will be fragmented into smaller reusable parts, with each usage sharing overlapping segments.
-	SplitToSmaller
+	SplitToSmaller UMETA(DisplayName = "[EXPERIMENTAL] Split to Smaller"),
 };
