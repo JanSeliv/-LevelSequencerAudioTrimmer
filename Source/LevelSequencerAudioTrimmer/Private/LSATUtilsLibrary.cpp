@@ -162,7 +162,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 				const bool bSuccessTrim = TrimAudio(TrimTimes, ExportPath, TrimmedAudioPath);
 				if (!bSuccessTrim)
 				{
-					UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Trimming audio failed for %s"), __FUNCTION__, *TrimmedSoundWave->GetName());
+					UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: ERROR: Trimming audio failed: %s"), __FUNCTION__, *TrimTimes.ToString(Section));
 					continue;
 				}
 
@@ -170,7 +170,7 @@ void ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(const TArray<ULevelSequence
 				const bool bSuccessReimport = ReimportAudioToUnreal(TrimmedSoundWave, TrimmedAudioPath);
 				if (!bSuccessReimport)
 				{
-					UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Reimporting trimmed audio failed for %s"), __FUNCTION__, *TrimmedSoundWave->GetName());
+					UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: ERROR: Reimporting trimmed audio failed: %s"), __FUNCTION__, *TrimTimes.ToString(Section));
 					continue;
 				}
 
@@ -348,7 +348,7 @@ void ULSATUtilsLibrary::HandleTrackBoundaries(FLSATTrimTimesMultiMap& InOutTrimT
 			}
 
 			OutAllNewSections.Add(AudioSection);
-			UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Finished trim to boundaries the section '%s' | %s"), __FUNCTION__, *AudioSection->GetName(), *TrimTimes.ToString(TickResolution));
+			UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Finished trim to boundaries: %s"), __FUNCTION__, *TrimTimes.ToString(AudioSection));
 		});
 	}
 }
@@ -364,7 +364,7 @@ void ULSATUtilsLibrary::HandleLargeStartOffset(FLSATTrimTimesMultiMap& InOutTrim
 			const FFrameRate TickResolution = GetTickResolution(AudioSection);
 			if (!TickResolution.IsValid())
 			{
-				UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: TickResolution is not valid for audio section '%s'"), __FUNCTION__, *AudioSection->GetName());
+				UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: TickResolution is not valid: %s"), __FUNCTION__, *TrimTimes.ToString(AudioSection));
 				return;
 			}
 
@@ -698,7 +698,7 @@ bool ULSATUtilsLibrary::TrimAudio(const FLSATTrimTimes& TrimTimes, const FString
 
 	if (ReturnCode != 0)
 	{
-		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: FFMPEG failed to trim audio. Error: %s"), __FUNCTION__, *Errors);
+		UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: FFMPEG failed with next error:\n%s"), __FUNCTION__, *Errors);
 		return false;
 	}
 
@@ -1160,7 +1160,7 @@ void ULSATUtilsLibrary::CreateAudioSectionsByTrimTimes(UMovieSceneAudioSection* 
 		const FFrameNumber SoundOffsetFrame = ConvertMsToFrameNumber(NewTrimTime.GetSoundTrimStartMs(), TickResolution);
 
 		UMovieSceneAudioSection* NewSection = DuplicateAudioSection(OriginalAudioSection, SectionStartFrame, SectionEndFrame, SoundOffsetFrame);
-		if (!ensureMsgf(NewSection, TEXT("ASSERT: [%i] %hs:\n'NewSection' failed to duplicate | %s!"), __LINE__, __FUNCTION__, *NewTrimTime.ToString(TickResolution)))
+		if (!ensureMsgf(NewSection, TEXT("ASSERT: [%i] %hs:\n'NewSection' failed to duplicate | %s!"), __LINE__, __FUNCTION__, *NewTrimTime.ToString(OriginalAudioSection)))
 		{
 			continue;
 		}

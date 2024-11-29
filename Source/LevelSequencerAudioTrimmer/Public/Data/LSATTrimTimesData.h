@@ -100,7 +100,7 @@ public:
 	static FLSATTrimTimes GetMaxTrimTimes(const FLSATTrimTimes& Left, const FLSATTrimTimes& Right);
 
 	/** Returns the string representation of the trim times that might be useful for logging. */
-	FString ToString(const FFrameRate& TickResolution) const;
+	FString ToString(const UMovieSceneAudioSection* AudioSection) const;
 
 	/** Returns short string representation of the trim times. */
 	FString ToCompactString() const;

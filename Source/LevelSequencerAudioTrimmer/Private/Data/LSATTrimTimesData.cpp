@@ -54,13 +54,13 @@ FLSATTrimTimes::FLSATTrimTimes(int32 InSoundTrimStartMs, int32 InSoundTrimEndMs,
  ********************************************************************************************* */
 
 // Returns SoundTrimStartMs in frames based on the tick resolution, or -1 if cannot convert
-int32 FLSATTrimTimes::GetSoundTrimStartFrame(const struct FFrameRate& TickResolution) const
+int32 FLSATTrimTimes::GetSoundTrimStartFrame(const FFrameRate& TickResolution) const
 {
 	return ULSATUtilsLibrary::ConvertMsToFrame(SoundTrimStartMs, TickResolution);
 }
 
 // Returns SoundTrimEndMs in frames based on the tick resolution, or -1 if cannot convert
-int32 FLSATTrimTimes::GetSoundTrimEndFrame(const struct FFrameRate& TickResolution) const
+int32 FLSATTrimTimes::GetSoundTrimEndFrame(const FFrameRate& TickResolution) const
 {
 	return ULSATUtilsLibrary::ConvertMsToFrame(SoundTrimEndMs, TickResolution);
 }
@@ -163,13 +163,16 @@ FLSATTrimTimes FLSATTrimTimes::GetMaxTrimTimes(const FLSATTrimTimes& Left, const
 }
 
 // Returns the string representation of the trim times that might be useful for logging
-FString FLSATTrimTimes::ToString(const FFrameRate& TickResolution) const
+FString FLSATTrimTimes::ToString(const UMovieSceneAudioSection* AudioSection) const
 {
+	const FFrameRate TickResolution = ULSATUtilsLibrary::GetTickResolution(AudioSection);
 	return FString::Printf(TEXT("Audio: %s "
+		"| Level Sequence: %s "
 		"| Usage: %d ms (frame %d) to %d ms (frame %d) "
 		"| Duration: %.2f sec (%d frames) "
 		"| Percentage Used: %1.f%%"),
-	                       *SoundWave->GetName()
+	                       *GetNameSafe(SoundWave)
+	                       , *GetNameSafe(ULSATUtilsLibrary::GetLevelSequence(AudioSection))
 	                       , SoundTrimStartMs, GetSoundTrimStartFrame(TickResolution), SoundTrimEndMs, GetSoundTrimEndFrame(TickResolution)
 	                       , GetSoundTrimEndSeconds() - GetSoundTrimStartSeconds(), GetUsagesFrames(TickResolution)
 	                       , GetUsagePercentage());
