@@ -952,7 +952,7 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		return;
 	}
 
-	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Splitting looping sections for %s"), __FUNCTION__, *TrimTimes.ToString(TickResolution));
+	UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Splitting looping sections for %s"), __FUNCTION__, *TrimTimes.ToString(InAudioSection));
 
 	if (!ensureMsgf(TrimTimes.IsValid(), TEXT("ASSERT: [%i] %hs:\n'TrimTimes' is not valid"), __LINE__, __FUNCTION__)
 		|| !ensureMsgf(InAudioSection, TEXT("ASSERT: [%i] %hs:\n'InAudioSection' is null!"), __LINE__, __FUNCTION__))
@@ -968,6 +968,7 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 
 	int32 CurrentStartTimeMs = SectionStartMs;
 	int32 SplitDurationMs = TotalSoundDurationMs - TrimTimes.GetSoundTrimStartMs();
+	const int32 MinDurationMs = ULSATSettings::GetMinDifferenceMs();
 
 	// Continue splitting until the end time is reached
 	while (CurrentStartTimeMs < SectionEndMs - SplitDurationMs)
@@ -975,7 +976,22 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: CurrentStartTimeMs: %d, TrimTimes.GetSoundTrimEndMs(): %d"), __FUNCTION__, CurrentStartTimeMs, TrimTimes.GetSoundTrimEndMs());
 
 		// Calculate the next split end time
-		const int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + SplitDurationMs, SectionEndMs);
+		int32 NextEndTimeMs = FMath::Min(CurrentStartTimeMs + SplitDurationMs, SectionEndMs);
+
+		// Avoid creating small segments by checking fragment size
+		if (NextEndTimeMs - CurrentStartTimeMs < MinDurationMs)
+		{
+			NextEndTimeMs = FMath::Min(CurrentStartTimeMs + MinDurationMs, SectionEndMs);
+		}
+
+		// Check if the remaining time at the end is too small
+		const int32 RemainingTimeMs = SectionEndMs - NextEndTimeMs;
+		if (RemainingTimeMs > 0 && RemainingTimeMs < MinDurationMs)
+		{
+			UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: Remaining time is too small to split: %d ms. Stopping further splits."), __FUNCTION__, RemainingTimeMs);
+			break;
+		}
+
 		UE_LOG(LogAudioTrimmer, Log, TEXT("%hs: NextEndTimeMs: %d"), __FUNCTION__, NextEndTimeMs);
 
 		// Convert the current start time to frame time for splitting
@@ -986,7 +1002,7 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		// Check if the section contains the split time
 		if (!InAudioSection->GetRange().Contains(SplitTime.Time.GetFrame()))
 		{
-			UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: ERROR: Section '%s' does not contain the split time: %d | %s"), __FUNCTION__, *InAudioSection->GetName(), SplitTime.Time.GetFrame().Value, *TrimTimes.ToString(TickResolution));
+			UE_LOG(LogAudioTrimmer, Error, TEXT("%hs: ERROR: Section '%s' does not contain the split time: %d | %s"), __FUNCTION__, *InAudioSection->GetName(), SplitTime.Time.GetFrame().Value, *TrimTimes.ToString(InAudioSection));
 			return;
 		}
 
@@ -995,7 +1011,7 @@ void ULSATUtilsLibrary::SplitLoopingSection(FLSATSectionsContainer& OutNewSectio
 		UMovieSceneAudioSection* NewSection = Cast<UMovieSceneAudioSection>(InAudioSection->SplitSection(SplitTime, bDeleteKeysWhenTrimming));
 		if (!NewSection)
 		{
-			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Failed to split section: %s"), __FUNCTION__, *InAudioSection->GetName());
+			UE_LOG(LogAudioTrimmer, Warning, TEXT("%hs: Failed to split section: %s"), __FUNCTION__, *TrimTimes.ToString(InAudioSection));
 			return;
 		}
 
