@@ -10,7 +10,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Modules/ModuleManager.h"
 
-IMPLEMENT_MODULE(FLevelSequencerAudioTrimmerEdModule, LevelSequencerAudioTrimmer)
+IMPLEMENT_MODULE(FLevelSequencerAudioTrimmerEdModule, LevelSequencerAudioTrimmerEd)
 
 // Current path to the plugin
 FString FLevelSequencerAudioTrimmerEdModule::PluginPath = TEXT("");
