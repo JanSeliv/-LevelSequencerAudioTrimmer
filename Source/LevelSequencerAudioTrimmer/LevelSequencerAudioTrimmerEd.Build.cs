@@ -15,6 +15,7 @@ public class LevelSequencerAudioTrimmerEd : ModuleRules
 			new[]
 			{
 				"Core"
+				, "DeveloperSettings" // Created ULevelSequencerAudioSettings
 			}
 		);
 

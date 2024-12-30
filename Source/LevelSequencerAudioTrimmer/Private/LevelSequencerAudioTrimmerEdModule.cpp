@@ -2,7 +2,7 @@
 
 #include "LevelSequencerAudioTrimmerEdModule.h"
 //---
-#include "AudioTrimmerUtilsLibrary.h"
+#include "LSATUtilsLibrary.h"
 //---
 #include "Editor.h"
 #include "LevelSequence.h"
@@ -10,7 +10,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Modules/ModuleManager.h"
 
-IMPLEMENT_MODULE(FLevelSequencerAudioTrimmerEdModule, LevelSequencerAudioTrimmer)
+IMPLEMENT_MODULE(FLevelSequencerAudioTrimmerEdModule, LevelSequencerAudioTrimmerEd)
 
 // Current path to the plugin
 FString FLevelSequencerAudioTrimmerEdModule::PluginPath = TEXT("");
@@ -58,12 +58,18 @@ void FLevelSequencerAudioTrimmerEdModule::OnLevelSequencerAudioTrimmerClicked()
 	TArray<FAssetData> SelectedAssets;
 	GEditor->GetContentBrowserSelections(SelectedAssets);
 
+	TArray<ULevelSequence*> LevelSequences;
 	for (const FAssetData& AssetData : SelectedAssets)
 	{
-		if (const ULevelSequence* LevelSequenceIt = Cast<ULevelSequence>(AssetData.GetAsset()))
+		if (ULevelSequence* LevelSequence = Cast<ULevelSequence>(AssetData.GetAsset()))
 		{
-			UAudioTrimmerUtilsLibrary::RunLevelSequenceAudioTrimmer(LevelSequenceIt);
+			LevelSequences.Add(LevelSequence);
 		}
+	}
+
+	if (!LevelSequences.IsEmpty())
+	{
+		ULSATUtilsLibrary::RunLevelSequenceAudioTrimmer(LevelSequences);
 	}
 }
 
